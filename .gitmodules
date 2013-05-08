@@ -1,0 +1,3 @@
+[submodule "BufferView"]
+	path = BufferView
+	url = git://github.com/davidflanagan/BufferView.git
