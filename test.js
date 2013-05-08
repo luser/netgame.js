@@ -16,7 +16,7 @@ test("Send", function() {
     var pkt = new Uint32Array(2);
     pkt[0] = 0xABABCDCD;
     pkt[1] = 0xFFFFFFFF;
-    n.processPacket(pkt.buffer);
+    equals(n.processPacket(pkt.buffer), true);
     n.sendPacket(function(buf) {
       equals(buf.byteLength, 8);
       var u32 = new Uint32Array(buf);
