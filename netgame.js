@@ -17,13 +17,16 @@
         // Process a packet from an ArrayBuffer.
         processPacket: function(buf) {
             var bufview = new DataView(buf);
+            //TODO: sanity check seq here
             var seq = bufview.getUint32(0, true);
             var ack = bufview.getUint32(4, true);
             this.nextAckToSend = seq;
             if (ack != 0xFFFFFFFF &&
                 ack <= this.lastSeqSent &&
-                ack > this.lastAckReceived) {
+                (ack > this.lastAckReceived ||
+                 this.lastAckReceived == 0xFFFFFFFF)) {
                 this.lastAckReceived = ack;
+                callback(this, "onack", [ack]);
             }
 
             return true;
@@ -52,6 +55,39 @@
         }
     };
 
+    function netprop(type, default_value) {
+        this.type = type;
+        this.value = default_value || 0;
+    }
+
+     function read_u32(dataview, offset) {
+         this.value = dataview.getUint32(offset, true);
+     }
+     function write_u32(dataview, offset) {
+         dataview.setUint32(offset, this.value, true);
+     }
+     function read_i32(dataview, offset) {
+         this.value = dataview.getInt32(offset, true);
+     }
+     function write_i32(dataview, offset) {
+         dataview.setInt32(offset, this.value, true);
+     }
+
+     // Default types
+     netprop.u32 = {size: 4, read: read_u32, write: write_u32 };
+     netprop.i32 = {size: 4, read: read_i32, write: write_i32 };
+
+     netprop.prototype = {
+         read: function(dataview, offset) {
+             this.type.read.apply(this, [dataview, offset]);
+             return offset + this.type.size;
+         },
+         write: function(dataview, offset) {
+             this.type.write.apply(this, [dataview, offset]);
+             return offset + this.type.size;
+         }
+     };
+
     function client_net() {
         //TODO
     }
@@ -61,6 +97,7 @@
     }
 
     scope.netgame = netgame;
+    scope.netprop = netprop;
     scope.client_net = client_net;
     scope.server_net = server_net;
 })(window);
