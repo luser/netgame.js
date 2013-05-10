@@ -35,6 +35,34 @@ test("Send", function() {
   equals(lastAck, 0);
 });
 
+test("BackAndForth", function() {
+  var client = new netgame();
+  var lastClientAck = null;
+  client.onack = function(ack) {
+    lastClientAck = ack;
+  };
+  var server = new netgame();
+  var lastServerAck = null;
+  server.onack = function(ack) {
+    lastServerAck = ack;
+  };
+  function client_recv(buf) {
+    client.processPacket(buf);
+  }
+  function server_recv(buf) {
+    server.processPacket(buf);
+  }
+  client.sendPacket(server_recv);
+  server.sendPacket(client_recv);
+  equals(lastClientAck, 0);
+  client.sendPacket(server_recv);
+  equals(lastServerAck, 0);
+  server.sendPacket(client_recv);
+  equals(lastClientAck, 1);
+  client.sendPacket(server_recv);
+  equals(lastServerAck, 1);
+});
+
 test("netprop.u32", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
