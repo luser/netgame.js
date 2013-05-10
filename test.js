@@ -70,3 +70,75 @@ test("netprop.i32", function() {
   equals(offset, 8);
   equals(p2.value, 12345678);
 });
+
+test("netprop.u16", function() {
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var p = new netprop(netprop.u16);
+  p.value = 0xABCD;
+  var offset = p.write(view, 0);
+  p.value = 0xFFFF;
+  offset = p.write(view, offset);
+  equals(offset, 4);
+
+  var p2 = new netprop(netprop.u16);
+  offset = p2.read(view, 0);
+  equals(p2.value, 0xABCD);
+  offset = p2.read(view, offset);
+  equals(offset, 4);
+  equals(p2.value, 0xFFFF);
+});
+
+test("netprop.i16", function() {
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var p = new netprop(netprop.i16);
+  p.value = -12345;
+  var offset = p.write(view, 0);
+  p.value = 12345;
+  offset = p.write(view, offset);
+  equals(offset, 4);
+
+  var p2 = new netprop(netprop.i16);
+  offset = p2.read(view, 0);
+  equals(p2.value, -12345);
+  offset = p2.read(view, offset);
+  equals(offset, 4);
+  equals(p2.value, 12345);
+});
+
+test("netprop.u8", function() {
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var p = new netprop(netprop.u8);
+  p.value = 0xAB;
+  var offset = p.write(view, 0);
+  p.value = 0xFF;
+  offset = p.write(view, offset);
+  equals(offset, 2);
+
+  var p2 = new netprop(netprop.u8);
+  offset = p2.read(view, 0);
+  equals(p2.value, 0xAB);
+  offset = p2.read(view, offset);
+  equals(offset, 2);
+  equals(p2.value, 0xFF);
+});
+
+test("netprop.i8", function() {
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var p = new netprop(netprop.i8);
+  p.value = -123;
+  var offset = p.write(view, 0);
+  p.value = 123;
+  offset = p.write(view, offset);
+  equals(offset, 2);
+
+  var p2 = new netprop(netprop.i8);
+  offset = p2.read(view, 0);
+  equals(p2.value, -123);
+  offset = p2.read(view, offset);
+  equals(offset, 2);
+  equals(p2.value, 123);
+});

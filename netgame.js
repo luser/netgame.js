@@ -60,6 +60,30 @@
     this.value = default_value || 0;
   }
 
+  function read_u8(dataview, offset) {
+    this.value = dataview.getUint8(offset, true);
+  }
+  function write_u8(dataview, offset) {
+    dataview.setUint8(offset, this.value, true);
+  }
+  function read_i8(dataview, offset) {
+    this.value = dataview.getInt8(offset, true);
+  }
+  function write_i8(dataview, offset) {
+    dataview.setInt8(offset, this.value, true);
+  }
+  function read_u16(dataview, offset) {
+    this.value = dataview.getUint16(offset, true);
+  }
+  function write_u16(dataview, offset) {
+    dataview.setUint16(offset, this.value, true);
+  }
+  function read_i16(dataview, offset) {
+    this.value = dataview.getInt16(offset, true);
+  }
+  function write_i16(dataview, offset) {
+    dataview.setInt16(offset, this.value, true);
+  }
   function read_u32(dataview, offset) {
     this.value = dataview.getUint32(offset, true);
   }
@@ -74,6 +98,10 @@
   }
 
   // Default types
+  netprop.u8 =  {size: 1, read: read_u8, write: write_u8 };
+  netprop.i8 =  {size: 1, read: read_i8, write: write_i8 };
+  netprop.u16 = {size: 2, read: read_u16, write: write_u16 };
+  netprop.i16 = {size: 2, read: read_i16, write: write_i16 };
   netprop.u32 = {size: 4, read: read_u32, write: write_u32 };
   netprop.i32 = {size: 4, read: read_i32, write: write_i32 };
 
