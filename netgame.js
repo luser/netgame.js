@@ -1,11 +1,10 @@
 "use strict";
-var netgame = (function() {
-    var PACKET_RINGBUFFER_SIZE = 64;
+(function(scope) {
     function netgame() {
         this.nextSequence = 0;
+        this.lastSeqSent = 0xFFFFFFFF;
         this.nextAckToSend = 0xFFFFFFFF;
         this.lastAckReceived = 0xFFFFFFFF;
-        this.packets = new Array(PACKET_RINGBUFFER_SIZE);
     }
 
     netgame.prototype = {
@@ -15,27 +14,12 @@ var netgame = (function() {
             var seq = bufview.readUnsignedInt();
             var ack = bufview.readUnsignedInt();
             this.nextAckToSend = seq;
-            if (ack == 0xFFFFFFFF)
-                // nothing to ack
-                return true;
-            var ackbuf = ack % PACKET_RINGBUFFER_SIZE;
-            if (!this.packets[ackbuf]) {
-                // Unknown packet being acked.
-                return false;
+            if (ack != 0xFFFFFFFF &&
+                ack <= this.lastSeqSent &&
+                ack > this.lastAckReceived) {
+                this.lastAckReceived = ack;                
             }
-            if (this.lastAckReceived == 0xFFFFFFFF)
-                this.lastAckReceived = ackbuf;
-            //FIXME: This is not really correct, as it doesn't account for
-            // dropped packets.
-            var i = this.lastAckReceived;
-            this.packets[i] = null;
-            if (this.lastAckReceived != ackbuf) {
-                do {
-                    i++;
-                    this.packets[i] = null;
-                } while (i != ackbuf);
-            }
-            this.lastAckReceived = ackbuf;
+
             return true;
         },
 
@@ -44,17 +28,16 @@ var netgame = (function() {
         // packet's contents.
         sendPacket: function(sender) {
             var seq = this.nextSequence;
+            this.lastSeqSent = seq;
             this.nextSequence++;
             var buf = new ArrayBuffer(8); //XXX: this sucks
             var bufview = new BufferView(buf, BufferView.LE);
             bufview.writeUnsignedInt(seq);
             bufview.writeUnsignedInt(this.nextAckToSend);
             //TODO: actually write data
-            //TODO: put something useful in here
-            this.packets[seq % PACKET_RINGBUFFER_SIZE] = {};
             sender(buf);
         }
     };
 
-    return netgame;
-})();
+    scope.netgame = netgame;
+})(window);
