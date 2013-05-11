@@ -6,14 +6,14 @@
     }
   }
 
-  function netgame() {
+  function netconn() {
     this.nextSequence = 0;
     this.lastSeqSent = 0xFFFFFFFF;
     this.nextAckToSend = 0xFFFFFFFF;
     this.lastAckReceived = 0xFFFFFFFF;
   }
 
-  netgame.prototype = {
+  netconn.prototype = {
     // Process a packet from an ArrayBuffer.
     processPacket: function(buf) {
       var bufview = new DataView(buf);
@@ -124,7 +124,7 @@
     //TODO
   }
 
-  scope.netgame = netgame;
+  scope.netconn = netconn;
   scope.netprop = netprop;
   scope.client_net = client_net;
   scope.server_net = server_net;

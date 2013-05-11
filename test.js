@@ -1,5 +1,5 @@
 test("Send", function() {
-  var n = new netgame();
+  var n = new netconn();
   n.sendPacket(function(buf) {
     equals(buf.byteLength, 8);
     var u32 = new Uint32Array(buf);
@@ -36,12 +36,12 @@ test("Send", function() {
 });
 
 test("BackAndForth", function() {
-  var client = new netgame();
+  var client = new netconn();
   var lastClientAck = null;
   client.onack = function(ack) {
     lastClientAck = ack;
   };
-  var server = new netgame();
+  var server = new netconn();
   var lastServerAck = null;
   server.onack = function(ack) {
     lastServerAck = ack;
