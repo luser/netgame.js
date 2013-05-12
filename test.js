@@ -170,3 +170,20 @@ test("netprop.i8", function() {
   equals(offset, 2);
   equals(p2.value, 123);
 });
+
+test("netobject", function() {
+  function testobj() {}
+  testobj.prototype = new netobject(testobj, {a: netprop.u8, b: netprop.u32});
+
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var t = new testobj();
+  t.a = 255;
+  t.b = 0xABCD1234;
+  equals(t.write(view, 0), 5);
+
+  var t2 = new testobj();
+  equals(t2.read(view, 0), 5);
+  equals(t2.a, t.a);
+  equals(t2.b, t.b);
+});

@@ -55,8 +55,9 @@
     }
   };
 
-  function netprop(type, default_value) {
+  function netprop(type, name, default_value) {
     this.type = type;
+    this.name = name || "";
     this.value = default_value || 0;
   }
 
@@ -116,16 +117,62 @@
     }
   };
 
+  // List of objects that have subclassed netobject. Indices in this array
+  // are passed across the network as tags, so they must match on both sides of
+  // the connection.
+  var netObjects = [];
+
+  function netobject(obj, props) {
+    this.netID = netObjects.length;
+    netObjects.push(obj.name);
+
+    var netprops = [];
+    var keys = Object.keys(props).sort();
+    function defineProp(obj, name) {
+      var np = new netprop(props[name], name);
+      netprops.push(np);
+      Object.defineProperty(obj, name, {
+                              enumerable: true,
+                              get: function() {
+                                return np.value;
+                              },
+                              set: function(value) {
+                                np.value = value;
+                              }
+                            });
+    }
+    for (var i = 0; i < keys.length; i++) {
+      defineProp(this, keys[i]);
+    }
+
+    this.write = function(dataview, offset) {
+      for (var i = 0; i < netprops.length; i++) {
+        //TODO: delta compress
+        offset = netprops[i].write(dataview, offset);
+      }
+      return offset;
+    };
+
+    this.read = function(dataview, offset) {
+      for (var i = 0; i < netprops.length; i++) {
+        //TODO: delta compress
+        offset = netprops[i].read(dataview, offset);
+      }
+      return offset;
+    };
+  }
+
   function client_net() {
     //TODO
   }
 
   function server_net() {
-    //TODO
+    this.conn = new netconn();
   }
 
   scope.netconn = netconn;
   scope.netprop = netprop;
+  scope.netobject = netobject;
   scope.client_net = client_net;
   scope.server_net = server_net;
 })(window);
