@@ -1,0 +1,1 @@
+{"name":"netgame.js","tagline":"game networking library intended for use with WebRTC DataChannels","body":"# netgame.js\r\n\r\nThis is a nascent library with plans to implement a networking layer for realtime gaming suitable for use across WebRTC DataChannels.","google":"","note":"Don't delete this file! It's used internally to help with page regeneration."}
