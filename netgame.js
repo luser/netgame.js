@@ -29,6 +29,8 @@
         callback(this, "onack", [ack]);
       }
 
+      callback(this, "onpacket", [buf.slice(8)]);
+
       return true;
     },
 
@@ -49,7 +51,8 @@
       bufview.setUint32(4, this.nextAckToSend, true);
       if (data) {
         var u8buf = new Uint8Array(buf);
-        u8buf.set(data, HEADER_SIZE);
+        var u8data = new Uint8Array(data);
+        u8buf.set(u8data, HEADER_SIZE);
       }
       sender(buf);
     }
@@ -160,19 +163,75 @@
       }
       return offset;
     };
+
+    this.size = function() {
+      var total = 0;
+      for (var i = 0; i < netprops.length; i++) {
+        total += netprops[i].type.size;
+      }
+      return total;
+    };
   }
 
-  function client_net() {
-    //TODO
+  function client_net(sender) {
+    this.sender = function() { sender.send(); };
+    this.netconn = new netconn();
   }
+  client_net.prototype = {
+    
+  };
+
+  function server_client(sender) {
+    this.sender = function(data) { sender.send(data); };
+    this.netconn = new netconn();
+  }
+  server_client.prototype = {
+    send: function(data) {
+      this.netconn.sendPacket(this.sender, data);
+    },
+    recv: function(data) {
+      callback(this, "onrecv", [data]);
+    }
+  };
 
   function server_net() {
-    this.conn = new netconn();
+    this.clients = [];
   }
+
+  server_net.prototype = {
+    addClient: function(client) {
+      this.clients.push(client);
+    },
+
+    updateClients: function(things) {
+      var total = 0;
+      for (var i = 0; i < things.length; i++) {
+        total += 2; // index + netID as u8s, pretty wasteful right now
+        total += things[i].size();
+      }
+      //TODO: should store world state per-client, delta-compress against
+      // acked state
+      var packet = new ArrayBuffer(total);
+      var view = new DataView(packet);
+      var offset = 0;
+      for (i = 0; i < things.length; i++) {
+        view.setUint8(offset, i);
+        offset++;
+        view.setUint8(offset, things[i].netID);
+        offset++;
+        offset = things[i].write(view, offset);
+      }
+
+      for (i = 0; i < this.clients.length; i++) {
+        this.clients[i].send(packet);
+      }
+    }
+  };
 
   scope.netconn = netconn;
   scope.netprop = netprop;
   scope.netobject = netobject;
   scope.client_net = client_net;
   scope.server_net = server_net;
+  scope.server_client = server_client;
 })(window);

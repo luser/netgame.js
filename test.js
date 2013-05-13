@@ -63,6 +63,24 @@ test("BackAndForth", function() {
   equals(lastServerAck, 1);
 });
 
+test("PacketData", function() {
+  var n = new netconn();
+  var pkt = new Uint32Array(4);
+  pkt[0] = 0xABABCDCD;
+  pkt[1] = 0xFFFFFFFF;
+  pkt[2] = 0x12345678;
+  pkt[3] = 0x87654321;
+  var gotpacket = false;
+  n.onpacket = function(buf) {
+    gotpacket = true;
+    var data = new Uint32Array(buf);
+    equals(data[0], pkt[2]);
+    equals(data[1], pkt[3]);
+  };
+  ok(n.processPacket(pkt.buffer));
+  ok(gotpacket);
+});
+
 test("netprop.u32", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
@@ -186,4 +204,38 @@ test("netobject", function() {
   equals(t2.read(view, 0), 5);
   equals(t2.a, t.a);
   equals(t2.b, t.b);
+});
+
+test("server_net", function() {
+  var packet = null;
+  function client_send(data) {
+    packet = data;
+  }
+  var server = new server_net();
+  var client = new server_client({send: client_send});
+  server.addClient(client);
+
+  function thing() {}
+  thing.prototype = new netobject(thing, {a: netprop.u8, b: netprop.u32});
+  var thing1 = new thing();
+  thing1.a = 100;
+  thing1.b = 12345678;
+  var thing2 = new thing();
+  thing2.a = 200;
+  thing2.b = 87654321;
+  server.updateClients([thing1, thing2]);
+  ok(packet != null);
+  var view = new DataView(packet);
+  equals(view.getUint8(8), 0);
+  equals(view.getUint8(9), thing.prototype.netID);
+  var thing1_read = new thing();
+  var offset = thing1_read.read(view, 10);
+  equals(thing1_read.a, thing1.a);
+  equals(thing1_read.b, thing1.b);
+  equals(view.getUint8(offset), 1);
+  equals(view.getUint8(offset + 1), thing.prototype.netID);
+  var thing2_read = new thing();
+  offset = thing2_read.read(view, offset + 2);
+  equals(thing2_read.a, thing2.a);
+  equals(thing2_read.b, thing2.b);
 });
