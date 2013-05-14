@@ -102,14 +102,23 @@
   }
 
   // Default types
-  netprop.u8 =  {size: 1, read: read_u8, write: write_u8 };
-  netprop.i8 =  {size: 1, read: read_i8, write: write_i8 };
-  netprop.u16 = {size: 2, read: read_u16, write: write_u16 };
-  netprop.i16 = {size: 2, read: read_i16, write: write_i16 };
-  netprop.u32 = {size: 4, read: read_u32, write: write_u32 };
-  netprop.i32 = {size: 4, read: read_i32, write: write_i32 };
+  netprop.u8 =  {size: 1, read: read_u8, write: write_u8,
+                 toString: function() { return "netprop.u8"; } };
+  netprop.i8 =  {size: 1, read: read_i8, write: write_i8,
+                 toString: function() { return "netprop.i8"; } };
+  netprop.u16 = {size: 2, read: read_u16, write: write_u16,
+                 toString: function() { return "netprop.u16"; } };
+  netprop.i16 = {size: 2, read: read_i16, write: write_i16,
+                 toString: function() { return "netprop.i16"; } };
+  netprop.u32 = {size: 4, read: read_u32, write: write_u32,
+                 toString: function() { return "netprop.u32"; } };
+  netprop.i32 = {size: 4, read: read_i32, write: write_i32,
+                 toString: function() { return "netprop.i32"; } };
 
   netprop.prototype = {
+    toString: function() {
+      return "netprop(" + this.type + "," + this.name + "," + this.default_value + ")";
+    },
     read: function(dataview, offset) {
       this.type.read.apply(this, [dataview, offset]);
       return offset + this.type.size;
@@ -120,15 +129,14 @@
     }
   };
 
-  // List of objects that have subclassed netobject. Indices in this array
-  // are passed across the network as tags, so they must match on both sides of
-  // the connection.
+  /*
+   * List of objects that have subclassed netobject. Indices in this array
+   * are passed across the network as tags, so they must match on both sides of
+   * the connection.
+   */
   var netObjects = [];
 
-  function netobject(obj, props) {
-    this.netID = netObjects.length;
-    netObjects.push(obj.name);
-
+  function netobject(props) {
     var netprops = [];
     var keys = Object.keys(props).sort();
     function defineProp(obj, name) {
@@ -173,12 +181,52 @@
     };
   }
 
+  /*
+   * Register a constructor as a netobject, and return a prototype
+   * for it.
+   */
+  netobject.register = function(cls) {
+    cls.netID = netObjects.length;
+    netObjects.push(cls);
+    return Object.create(netobject.prototype,
+                         {constructor: {value: cls}});
+  };
+
   function client_net(sender) {
     this.sender = function() { sender.send(); };
     this.netconn = new netconn();
+    // Local copies of world things mirrored from the server
+    this.things = [];
+    var self = this;
+    this.netconn.onpacket = function(packet) {
+      var view = new DataView(packet);
+      var offset = 0;
+      // Iterate over all netobjects in this packet.
+      while (offset < view.byteLength) {
+        var index = view.getUint8(offset);
+        offset++;
+        if (offset == view.byteLength)
+          break;
+        var netID = view.getUint8(offset);
+        offset++;
+        if (offset == view.byteLength)
+          break;
+        if (netID >= netObjects.length)
+          break;
+        var obj = new netObjects[netID]();
+        offset = obj.read(view, offset);
+        self.things[index] = obj;
+      }
+    };
   }
+
   client_net.prototype = {
-    
+    send: function(data) {
+      this.netconn.sendPacket(this.sender, data);
+    },
+    recv: function(data) {
+      this.netconn.processPacket(data);
+    }
   };
 
   function server_client(sender) {
