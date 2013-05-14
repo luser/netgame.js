@@ -43,7 +43,7 @@ function client_recv(data) {
 
 server.addClient(new server_client({send: client_recv}));
 var intervalID = null;
-var lastUpdate = performance.now();
+//var lastUpdate = performance.now();
 var packetLoss = 0;
 
 function randX() {
@@ -69,14 +69,14 @@ function setup() {
     b.dir = randDir();
     things.push(b);
   }
-  lastUpdate = performance.now();
+  //lastUpdate = performance.now();
   intervalID = setInterval(runServerFrame, 100);
   requestAnimationFrame(redraw);
   document.getElementById("packetloss").value = 0;
 }
 
 function runServerFrame() {
-  var now = performance.now();
+  //var now = performance.now();
   // Move all things.
   //TODO: make movement time-relative
   for (var i = 0; i < things.length; i++) {
@@ -85,7 +85,7 @@ function runServerFrame() {
     t.y = (t.y + t.dir.y) % HEIGHT;
   }
   server.updateClients(things);
-  lastUpdate = now;
+  //lastUpdate = now;
 }
 
 function drawWorld(cx, things) {
