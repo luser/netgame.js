@@ -186,10 +186,12 @@
    * for it.
    */
   netobject.register = function(cls) {
-    cls.netID = netObjects.length;
+    var netID = netObjects.length;
     netObjects.push(cls);
     return Object.create(netobject.prototype,
-                         {constructor: {value: cls}});
+                         {constructor: {value: cls},
+                          netID: {value: netID}
+                         });
   };
 
   function client_net(sender) {

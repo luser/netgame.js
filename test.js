@@ -222,6 +222,11 @@ test("server_net", function() {
   }
   thing.prototype = netobject.register(thing);
 
+  function anotherthing() {
+    netobject.call(this, {x: netprop.u32});
+  }
+  anotherthing.prototype = netobject.register(anotherthing);
+
   var thing1 = new thing();
   thing1.a = 100;
   thing1.b = 12345678;
@@ -230,21 +235,32 @@ test("server_net", function() {
   thing2.b = 87654321;
   notStrictEqual(thing1.a, thing2.a, "thing1.a and thing2.a should not be the same");
   notStrictEqual(thing1.b, thing2.b, "thing1.b and thing2.b should not be the same");
-  server.updateClients([thing1, thing2]);
+  var thing3 = new anotherthing();
+  thing3.x = 0xABABABAB;
+  server.updateClients([thing1, thing2, thing3]);
+
   ok(packet != null);
   var view = new DataView(packet);
   equals(view.getUint8(8), 0);
-  equals(view.getUint8(9), thing.netID);
+  equals(view.getUint8(9), thing.prototype.netID);
+
   var thing1_read = new thing();
   var offset = thing1_read.read(view, 10);
   equals(thing1_read.a, thing1.a);
   equals(thing1_read.b, thing1.b);
   equals(view.getUint8(offset), 1);
-  equals(view.getUint8(offset + 1), thing.netID);
+  equals(view.getUint8(offset + 1), thing.prototype.netID);
+
   var thing2_read = new thing();
   offset = thing2_read.read(view, offset + 2);
   equals(thing2_read.a, thing2.a);
   equals(thing2_read.b, thing2.b);
   notStrictEqual(thing1_read.a, thing2_read.a);
   notStrictEqual(thing1_read.b, thing2_read.b);
+
+  var thing3_read = new anotherthing();
+  equals(view.getUint8(offset), 2);
+  equals(view.getUint8(offset + 1), anotherthing.prototype.netID);
+  offset = thing3_read.read(view, offset + 2);
+  equals(thing3_read.x, thing3.x);
 });
