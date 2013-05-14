@@ -197,6 +197,7 @@
     this.netconn = new netconn();
     // Local copies of world things mirrored from the server
     this.things = [];
+    var self = this;
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
       var offset = 0;
@@ -214,7 +215,7 @@
           break;
         var obj = new netObjects[netID]();
         offset = obj.read(view, offset);
-        this.things[index] = obj;
+        self.things[index] = obj;
       }
     };
   }
