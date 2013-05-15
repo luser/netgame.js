@@ -46,6 +46,7 @@ var things = [];
 var server = new server_net();
 var client = new client_net({send: function(data) {}}); // Client doesn't currently send any data.
 function client_recv(data) {
+  updateClientDataRate(data.byteLength);
   if (Math.random() > packetLoss) {
     client.recv(data);
   }
@@ -56,6 +57,25 @@ var serverIntervalID = null;
 var transmitIntervalID = null;
 var lastUpdate = performance.now();
 var packetLoss = 0;
+var CLIENT_PACKET_SAMPLES = 20;
+var clientPackets = [];
+
+function updateClientDataRate(bytes) {
+  var now = performance.now();
+  clientPackets.push([now, bytes]);
+  if (clientPackets.length > CLIENT_PACKET_SAMPLES) {
+    clientPackets.shift();
+  }
+  if (clientPackets.length == CLIENT_PACKET_SAMPLES) {
+    var elapsed = (now - clientPackets[0][0]) / 1000;
+    var total = 0;
+    for (var i = 0; i < clientPackets.length; i++) {
+      total += clientPackets[i][1];
+    }
+    var rate = ((total * 8) / 1024) / elapsed;
+    document.getElementById("client-rate").firstChild.textContent = Math.round(rate * 100) / 100;
+  }
+}
 
 function randX() {
    return Math.floor(Math.random() * (WIDTH + 1));
