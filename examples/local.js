@@ -2,7 +2,15 @@
   var requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame ||
                               window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
   window.requestAnimationFrame = requestAnimationFrame;
+
+  if (!('performance' in window)) {
+    window.performance = {};
+  }
+  if (!('now' in window.performance)) {
+    window.performance.now = Date.now;
+  }
 })();
+
 
 // Really simple object, just 1-byte X and Y coordinates.
 function ball() {
@@ -32,6 +40,8 @@ block.prototype.draw = function(cx) {
 };
 
 var WIDTH = 200, HEIGHT = 200;
+var server_rate = 15;
+var transmit_rate = 50;
 var things = [];
 var server = new server_net();
 var client = new client_net({send: function(data) {}}); // Client doesn't currently send any data.
@@ -42,8 +52,9 @@ function client_recv(data) {
 }
 
 server.addClient(new server_client({send: client_recv}));
-var intervalID = null;
-//var lastUpdate = performance.now();
+var serverIntervalID = null;
+var transmitIntervalID = null;
+var lastUpdate = performance.now();
 var packetLoss = 0;
 
 function randX() {
@@ -56,8 +67,8 @@ function randY() {
 
 function randDir() {
   //TODO: support negative directions
-  return {x: Math.floor(Math.random() * (5 + 1)),
-          y: Math.floor(Math.random() * (5 + 1))};
+  return {x: Math.floor(Math.random() * (20 + 1)),
+          y: Math.floor(Math.random() * (20 + 1))};
 }
 
 function setup() {
@@ -69,23 +80,27 @@ function setup() {
     b.dir = randDir();
     things.push(b);
   }
-  //lastUpdate = performance.now();
-  intervalID = setInterval(runServerFrame, 100);
+  lastUpdate = performance.now();
+  serverIntervalID = setInterval(runServerFrame, server_rate);
+  transmitIntervalID = setInterval(sendToClients, transmit_rate);
   requestAnimationFrame(redraw);
   document.getElementById("packetloss").value = 0;
 }
 
 function runServerFrame() {
-  //var now = performance.now();
+  var now = performance.now();
+  var elapseds = (now - lastUpdate) / 1000.0;
   // Move all things.
-  //TODO: make movement time-relative
   for (var i = 0; i < things.length; i++) {
     var t = things[i];
-    t.x = (t.x + t.dir.x) % WIDTH;
-    t.y = (t.y + t.dir.y) % HEIGHT;
+    t.x = (t.x + t.dir.x*elapseds) % WIDTH;
+    t.y = (t.y + t.dir.y*elapseds) % HEIGHT;
   }
+  lastUpdate = now;
+}
+
+function sendToClients() {
   server.updateClients(things);
-  //lastUpdate = now;
 }
 
 function drawWorld(cx, things) {
