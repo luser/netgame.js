@@ -45,20 +45,23 @@ var transmit_rate = 50;
 var things = [];
 var server = new server_net();
 var client = new client_net({send: function(data) {}}); // Client doesn't currently send any data.
-function client_recv(data) {
-  updateClientDataRate(data.byteLength);
-  if (Math.random() > packetLoss) {
-    client.recv(data);
-  }
-}
-
 server.addClient(new server_client({send: client_recv}));
+
 var serverIntervalID = null;
 var transmitIntervalID = null;
 var lastUpdate = performance.now();
 var packetLoss = 0;
+var latency = 0;
 var CLIENT_PACKET_SAMPLES = 20;
 var clientPackets = [];
+var lastRateUpdate = 0;
+
+function client_recv(data) {
+  updateClientDataRate(data.byteLength);
+  if (Math.random() > packetLoss) {
+    setTimeout(function() { client.recv(data); }, latency);
+  }
+}
 
 function updateClientDataRate(bytes) {
   var now = performance.now();
@@ -66,7 +69,8 @@ function updateClientDataRate(bytes) {
   if (clientPackets.length > CLIENT_PACKET_SAMPLES) {
     clientPackets.shift();
   }
-  if (clientPackets.length == CLIENT_PACKET_SAMPLES) {
+  if (clientPackets.length == CLIENT_PACKET_SAMPLES && (now - lastRateUpdate) > 1000) {
+    lastRateUpdate = now;
     var elapsed = (now - clientPackets[0][0]) / 1000;
     var total = 0;
     for (var i = 0; i < clientPackets.length; i++) {
@@ -134,6 +138,11 @@ function redraw() {
   drawWorld(document.getElementById("server").getContext("2d"), things);
   drawWorld(document.getElementById("client").getContext("2d"), client.things);
   requestAnimationFrame(redraw);
+}
+
+function updateLatency(value) {
+  document.getElementById("latency-value").firstChild.textContent = value;
+  latency = value;
 }
 
 function updatePacketLoss(value) {
