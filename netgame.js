@@ -6,6 +6,11 @@
     }
   }
 
+  /*
+   * A netconn represents a single network connection. It does not actually transmit
+   * data, you must call processPacket for each packet that arrives, and pass a sender
+   * function when calling sendPacket.
+   */
   function netconn() {
     this.nextSequence = 0;
     this.lastSeqSent = 0xFFFFFFFF;
@@ -14,7 +19,9 @@
   }
 
   netconn.prototype = {
-    // Process a packet from an ArrayBuffer.
+    /*
+     * Process a packet from an ArrayBuffer.
+     */
     processPacket: function(buf) {
       var bufview = new DataView(buf);
       //TODO: sanity check seq here
@@ -34,9 +41,11 @@
       return true;
     },
 
-    // Construct a packet and send it by calling
-    // sender, passing it the ArrayBuffer of the
-    // packet's contents. data is the packet payload as an ArrayBuffer.
+    /*
+     * Construct a packet and send it by calling
+     * sender, passing it the ArrayBuffer of the
+     * packet's contents. data is the packet payload as an ArrayBuffer.
+     */
     sendPacket: function(sender, data) {
       var HEADER_SIZE = 8;
       var seq = this.nextSequence;
@@ -58,6 +67,14 @@
     }
   };
 
+  /*
+   * A netprop is a single property that has a fixed binary representation so it
+   * can be serialized for transmission across the network.
+   * The type parameter should be one of the types defined on this function:
+   * netprop.{u8,i8}: unsigned or signed 8-bit value.
+   * netprop.{u16,i16}: unsigned or signed 16-bit value.
+   * netprop.{u32,i32}: unsigned or signed 32-bit value.
+   */
   function netprop(type, name, default_value) {
     this.type = type;
     this.name = name || "";
@@ -101,7 +118,7 @@
     dataview.setInt32(offset, this.value, true);
   }
 
-  // Default types
+  // Built-in types.
   netprop.u8 =  {size: 1, read: read_u8, write: write_u8,
                  toString: function() { return "netprop.u8"; } };
   netprop.i8 =  {size: 1, read: read_i8, write: write_i8,
@@ -119,10 +136,18 @@
     toString: function() {
       return "netprop(" + this.type + "," + this.name + "," + this.default_value + ")";
     },
+    /*
+     * Read this property from dataview, starting at offset.
+     * Return the new offset after reading.
+     */
     read: function(dataview, offset) {
       this.type.read.apply(this, [dataview, offset]);
       return offset + this.type.size;
     },
+    /*
+     * Write this property to dataview, starting at offset.
+     * Return the new offset after writing.
+     */
     write: function(dataview, offset) {
       this.type.write.apply(this, [dataview, offset]);
       return offset + this.type.size;
@@ -136,6 +161,17 @@
    */
   var netObjects = [];
 
+  /*
+   * A netobject is an object that can be serialized across the network.
+   * The props argument is an object whose keys will be added as properties
+   * to the this object and whose values are appropriate for passing to the
+   * netprop constructor.
+   *
+   * Example:
+   *   var obj = new netobject({a: netprop.u8});
+   *
+   * See also the documentation for netobject.register.
+   */
   function netobject(props) {
     var netprops = [];
     var keys = Object.keys(props).sort();
@@ -156,6 +192,10 @@
       defineProp(this, keys[i]);
     }
 
+    /*
+     * Write all the properties of this object to dataview starting at offset.
+     * Returns the new offset after writing.
+     */
     this.write = function(dataview, offset) {
       for (var i = 0; i < netprops.length; i++) {
         //TODO: delta compress
@@ -164,6 +204,10 @@
       return offset;
     };
 
+    /*
+     * Read all the properties of this object from dataview starting at offset.
+     * Return the new offset after reading.
+     */
     this.read = function(dataview, offset) {
       for (var i = 0; i < netprops.length; i++) {
         //TODO: delta compress
@@ -172,6 +216,10 @@
       return offset;
     };
 
+    /*
+     * Return the number of bytes this object requires to serialize all of
+     * its properties.
+     */
     this.size = function() {
       var total = 0;
       for (var i = 0; i < netprops.length; i++) {
@@ -184,6 +232,10 @@
   /*
    * Register a constructor as a netobject, and return a prototype
    * for it.
+   *
+   * Example:
+   *   var myobject() { netobject.call(this, {a: netobject.u32; }); }
+   *   myobject.prototype = netobject.register(myobject);
    */
   netobject.register = function(cls) {
     var netID = netObjects.length;
@@ -194,9 +246,26 @@
                          });
   };
 
-  function client_net(sender) {
-    this.sender = function() { sender.send(); };
+  /*
+   * client_net represents the client side of a game connection. sender is an
+   * object whose send method accepts an ArrayBuffer of data to send.
+   * input_type is a constructor that is a subclass of netobject that represents
+   * input from the player.
+   */
+  function client_net(sender, input_type) {
+    function sender_send(data) {
+       sender.send(data);
+    }
     this.netconn = new netconn();
+    var input_count = 32;
+    var lastSentInputID = 0;
+    var nextInputID = 0;
+    var inputs = new Array(input_count);
+    if (input_type) {
+      for (var i = 0; i < input_count; i++) {
+        inputs[i] = new input_type();
+      }
+    }
     // Local copies of world things mirrored from the server
     this.things = [];
     var self = this;
@@ -218,41 +287,114 @@
         var obj = new netObjects[netID]();
         offset = obj.read(view, offset);
         self.things[index] = obj;
+        callback(self, "onupdate", []);
       }
+    };
+
+    /*
+     * Return an input object (of type input_type) whose properties can be set.
+     * This object will be sent to the server the next time sendToServer is called.
+     */
+    this.getNextInput = function() {
+      var input = inputs[nextInputID % input_count];
+      nextInputID++;
+      return input;
+    };
+
+    this.sendToServer = function() {
+      if (lastSentInputID == nextInputID) {
+        //TODO: just send an ACK if necessary
+        return;
+      }
+      //TODO: could keep this around instead of creating a new one every time.
+      var packet = new ArrayBuffer((nextInputID - lastSentInputID) * (inputs[0].size() + 1));
+      var view = new DataView(packet);
+      var offset = 0;
+      for (var i = lastSentInputID; i < nextInputID; i++) {
+        var idx = i % input_count;
+        view.setUint8(offset, inputs[idx].netID);
+        offset++;
+        offset = inputs[idx].write(view, offset);
+      }
+      self.netconn.sendPacket(sender_send, packet);
+      lastSentInputID = nextInputID;
+      //TODO: keep track of ACKed inputs
     };
   }
 
   client_net.prototype = {
-    send: function(data) {
-      this.netconn.sendPacket(this.sender, data);
-    },
+    /*
+     * Pass a packet received from the network to the client.
+     */
     recv: function(data) {
       this.netconn.processPacket(data);
     }
   };
 
+  /*
+   * server_client represents the server's network connection to a client. sender is an
+   * object whose send method accepts an ArrayBuffer of data to send.
+   * One of these should be created for each client connected to a server, and passed
+   * to server_net.addClient.
+   */
   function server_client(sender) {
     this.sender = function(data) { sender.send(data); };
     this.netconn = new netconn();
+
+    var self = this;
+    this.netconn.onpacket = function(packet) {
+      var view = new DataView(packet);
+      var offset = 0;
+      // Iterate over all inputs in this packet.
+      while (offset < view.byteLength) {
+        var netID = view.getUint8(offset);
+        offset++;
+        if (offset == view.byteLength)
+          break;
+        if (netID >= netObjects.length)
+          break;
+        //TODO: don't construct a new input every time
+        var input = new netObjects[netID]();
+        offset = input.read(view, offset);
+        callback(self, "oninput", [input]);
+      }
+    };
   }
   server_client.prototype = {
+    /*
+     * Send a packet to the client.
+     */
     send: function(data) {
       this.netconn.sendPacket(this.sender, data);
     },
+    /*
+     * Pass a packet received from the network to the server.
+     */
     recv: function(data) {
-      callback(this, "onrecv", [data]);
+      this.netconn.processPacket(data);
     }
   };
 
+  /*
+   * server_net represents the state of the server's network connection to all
+   * clients. Call addClient with a server_client instance to add a new client
+   * connected to the server. Call updateClients to send a network packet to all clients.
+   */
   function server_net() {
     this.clients = [];
   }
 
   server_net.prototype = {
+    /*
+     * Add client as a connected client. It should be a server_client object.
+     */
     addClient: function(client) {
       this.clients.push(client);
     },
 
+    /*
+     * Send a network packet updating all clients about the list of things in the game.
+     */
     updateClients: function(things) {
       var total = 0;
       for (var i = 0; i < things.length; i++) {

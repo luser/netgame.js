@@ -212,9 +212,10 @@ test("server_net", function() {
   var packetReceived = false;
   var server = new server_net();
   var client = new client_net({send: function(data) {}}); // client doesn't send any data.
-  var sclient = new server_client({send: function(data) { packetReceived = true;
-                                                          client.recv(data);
-                                                        }});
+  client.onupdate = function() {
+     packetReceived = true;
+  };
+  var sclient = new server_client({send: function(data) { client.recv(data); }});
   server.addClient(sclient);
 
   function thing() {
@@ -257,4 +258,40 @@ test("server_net", function() {
   var thing3_read = client.things[2];
   ok(thing3_read instanceof anotherthing);
   equals(thing3_read.x, thing3.x);
+});
+
+test("client_net", function() {
+  function myinput() {
+    netobject.call(this, {a: netprop.u8});
+  }
+  myinput.prototype = netobject.register(myinput);
+
+  var server = new server_net();
+  var sclient = new server_client({send: function(data) {}}); // server doesn't send any data.
+  var client = new client_net({send: function(data) { sclient.recv(data); }}, myinput);
+  server.addClient(sclient);
+
+  var inputs = [];
+  sclient.oninput = function(input) {
+    inputs.push(input);
+  };
+
+  var i = client.getNextInput();
+  i.a = 10;
+  i = client.getNextInput();
+  i.a = 100;
+  i = client.getNextInput();
+  i.a = 200;
+  client.sendToServer();
+  equals(inputs.length, 3);
+  equals(inputs[0].a, 10);
+  equals(inputs[1].a, 100);
+  equals(inputs[2].a, 200);
+
+  inputs = [];
+  i = client.getNextInput();
+  i.a = 0;
+  client.sendToServer();
+  equals(inputs.length, 1);
+  equals(inputs[0].a, 0);
 });
