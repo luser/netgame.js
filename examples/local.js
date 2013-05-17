@@ -89,10 +89,14 @@ function randY() {
    return Math.floor(Math.random() * (HEIGHT + 1));
 }
 
+function randSign() {
+  return Math.random() < 0.5 ? -1 : 1;
+}
+
 function randDir() {
   //TODO: support negative directions
-  return {x: Math.floor(Math.random() * (20 + 1)),
-          y: Math.floor(Math.random() * (20 + 1))};
+  return {x: Math.floor(Math.random() * (20 + 1)) * randSign(),
+          y: Math.floor(Math.random() * (20 + 1)) * randSign()};
 }
 
 function setup() {
@@ -111,14 +115,22 @@ function setup() {
   document.getElementById("packetloss").value = 0;
 }
 
+function wraparound(val, min, max) {
+  if (val < min)
+    return val + max;
+  if (val > max)
+    return val % max;
+  return val;
+}
+
 function runServerFrame() {
   var now = performance.now();
   var elapseds = (now - lastUpdate) / 1000.0;
   // Move all things.
   for (var i = 0; i < things.length; i++) {
     var t = things[i];
-    t.x = (t.x + t.dir.x*elapseds) % WIDTH;
-    t.y = (t.y + t.dir.y*elapseds) % HEIGHT;
+    t.x = wraparound(t.x + t.dir.x*elapseds, 0, WIDTH);
+    t.y = wraparound(t.y + t.dir.y*elapseds, 0, HEIGHT);
   }
   lastUpdate = now;
 }
