@@ -28,6 +28,8 @@ ball.prototype.draw = function(cx) {
   cx.fill();
 };
 
+//TODO: figure out netobject inheritance, these things all have common
+// properties...
 function block() {
   netobject.call(this, {x: netprop.u8, y: netprop.u8});
 }
@@ -39,13 +41,39 @@ block.prototype.draw = function(cx) {
   cx.fillRect(this.x - 2, this.y - 2, 4, 4);
 };
 
+function player() {
+  netobject.call(this, {x: netprop.u8, y: netprop.u8});
+}
+
+player.prototype = netobject.register(player);
+
+player.prototype.draw = function(cx) {
+  cx.fillStyle = "green";
+  cx.beginPath();
+  cx.moveTo(this.x, this.y - 3);
+  cx.lineTo(this.x + 3, this.y + 3);
+  cx.lineTo(this.x - 3, this.y + 3);
+  cx.lineTo(this.x, this.y - 3);
+  cx.fill();
+};
+
+// Object to represent player input state
+function clientinput() {
+  netobject.call(this, {xmove: netprop.i8, ymove: netprop.i8,
+                        timestamp: netprop.u32});
+}
+
+clientinput.prototype = netobject.register(clientinput);
+
 var WIDTH = 200, HEIGHT = 200;
 var server_rate = 15;
 var transmit_rate = 50;
 var things = [];
 var server = new server_net();
-var client = new client_net({send: function(data) {}}); // Client doesn't currently send any data.
-server.addClient(new server_client({send: client_recv}));
+var client = new client_net({send: function(data) { sc.recv(data); }},
+                            clientinput);
+var sc = new server_client({send: client_recv});
+server.addClient(sc);
 
 var serverIntervalID = null;
 var transmitIntervalID = null;
@@ -108,6 +136,12 @@ function setup() {
     b.dir = randDir();
     things.push(b);
   }
+  //addClient
+  var p = new player();
+  p.x = randX();
+  p.y = randY();
+  things.push(p);
+
   lastUpdate = performance.now();
   serverIntervalID = setInterval(runServerFrame, server_rate);
   transmitIntervalID = setInterval(sendToClients, transmit_rate);
@@ -129,6 +163,9 @@ function runServerFrame() {
   // Move all things.
   for (var i = 0; i < things.length; i++) {
     var t = things[i];
+    if (t instanceof player) {
+      continue;
+    }
     t.x = wraparound(t.x + t.dir.x*elapseds, 0, WIDTH);
     t.y = wraparound(t.y + t.dir.y*elapseds, 0, HEIGHT);
   }
@@ -162,4 +199,22 @@ function updatePacketLoss(value) {
   packetLoss = value / 100.0;
 }
 
+function keyhandler(e) {
+  if (e.keyCode >= 37 && e.keyCode <= 40) {
+    var press = e.type == "keydown";
+    var i = client.getNextInput();
+    if (e.keyCode == 37) {
+      i.xmove = press ? -5 : 0;
+    } else if (e.keyCode == 39) {
+      i.xmove = press ? 5 : 0;
+    } else if (e.keyCode == 38) {
+      i.ymove = press ? -5 : 0;
+    } else if (e.keyCode == 40) {
+      i.ymove = press ? 5 : 0;
+    }
+  }
+}
+
 addEventListener("load", setup);
+addEventListner("keydown", keyhandler);
+addEventListner("keyup", keyhandler);
