@@ -208,6 +208,33 @@ test("netobject", function() {
   equals(t2.b, t.b);
 });
 
+test("netobject_inherit", function() {
+  function testobj() {
+    netobject.call(this, {a: netprop.u8, b: netprop.u32});
+  }
+  testobj.prototype = netobject.register(testobj);
+
+  function subobj() {
+    testobj.call(this);
+  }
+  subobj.prototype = netobject.register(subobj, testobj);
+
+  var s = new subobj();
+  ok("a" in s);
+  ok("b" in s);
+
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  s.a = 255;
+  s.b = 0xABCD1234;
+  equals(s.write(view, 0), 5);
+
+  var s2 = new subobj();
+  equals(s2.read(view, 0), 5);
+  equals(s2.a, s.a);
+  equals(s2.b, s.b);
+});
+
 test("server_net", function() {
   var packetReceived = false;
   var server = new server_net();

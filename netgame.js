@@ -231,16 +231,17 @@
 
   /*
    * Register a constructor as a netobject, and return a prototype
-   * for it.
+   * for it. If the class derives from a subclass of netobject, pass
+   * the parent class as the second parameter.
    *
    * Example:
    *   var myobject() { netobject.call(this, {a: netobject.u32; }); }
    *   myobject.prototype = netobject.register(myobject);
    */
-  netobject.register = function(cls) {
+  netobject.register = function(cls, parent) {
     var netID = netObjects.length;
     netObjects.push(cls);
-    return Object.create(netobject.prototype,
+    return Object.create(parent || netobject.prototype,
                          {constructor: {value: cls},
                           netID: {value: netID}
                          });

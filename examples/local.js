@@ -13,13 +13,19 @@
 
 
 // Really simple object, just 1-byte X and Y coordinates.
-function ball() {
+function thing() {
   netobject.call(this, {x: netprop.u8, y: netprop.u8});
 }
 
 // If we get client prediction we'll want to send the velocity as well, but
 // this is fine for now.
-ball.prototype = netobject.register(ball);
+thing.prototype = netobject.register(thing);
+
+function ball() {
+  thing.call(this);
+}
+
+ball.prototype = netobject.register(ball, thing);
 
 ball.prototype.draw = function(cx) {
   cx.fillStyle = "blue";
@@ -28,13 +34,11 @@ ball.prototype.draw = function(cx) {
   cx.fill();
 };
 
-//TODO: figure out netobject inheritance, these things all have common
-// properties...
 function block() {
-  netobject.call(this, {x: netprop.u8, y: netprop.u8});
+  thing.call(this);
 }
 
-block.prototype = netobject.register(block);
+block.prototype = netobject.register(block, thing);
 
 block.prototype.draw = function(cx) {
   cx.fillStyle = "red";
@@ -42,10 +46,10 @@ block.prototype.draw = function(cx) {
 };
 
 function player() {
-  netobject.call(this, {x: netprop.u8, y: netprop.u8});
+  thing.call(this);
 }
 
-player.prototype = netobject.register(player);
+player.prototype = netobject.register(player, thing);
 
 player.prototype.draw = function(cx) {
   cx.fillStyle = "green";
