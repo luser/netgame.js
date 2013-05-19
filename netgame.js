@@ -1,5 +1,8 @@
 "use strict";
 (function(scope) {
+  var perfnow = window && 'performance' in window && 'now' in window.performance
+    ? function() { return Math.round(window.performance.now()); } : Date.now;
+
   function callback(thing, method, args) {
     if(method in thing && 'function' === typeof thing[method]) {
       thing[method].apply(thing, args);
@@ -45,6 +48,7 @@
      * Construct a packet and send it by calling
      * sender, passing it the ArrayBuffer of the
      * packet's contents. data is the packet payload as an ArrayBuffer.
+     * Returns the sequence number of the packet sent.
      */
     sendPacket: function(sender, data) {
       var HEADER_SIZE = 8;
@@ -64,6 +68,7 @@
         u8buf.set(u8data, HEADER_SIZE);
       }
       sender(buf);
+      return seq;
     }
   };
 
@@ -248,16 +253,32 @@
   };
 
   /*
+   * clientinput is a subclass of netobject used to store input
+   * from the client for transmission to the server.
+   */
+  function clientinput(props) {
+    props = props || {};
+    props.timestamp = netobj.u32;
+    netobject.call(this, props);
+  }
+
+  clientinput.prototype = netobject.register(clientinput);
+
+  /*
    * client_net represents the client side of a game connection. sender is an
    * object whose send method accepts an ArrayBuffer of data to send.
-   * input_type is a constructor that is a subclass of netobject that represents
-   * input from the player.
+   * input_type is a constructor that is a subclass of clientinput that
+   * represents input from the player.
    */
   function client_net(sender, input_type) {
     function sender_send(data) {
        sender.send(data);
     }
     this.netconn = new netconn();
+    this.serverTime = 0;
+    var lastLag = 0;
+    var packetData = new Array(32);
+
     var input_count = 32;
     var lastSentInputID = 0;
     var nextInputID = 0;
@@ -270,9 +291,19 @@
     // Local copies of world things mirrored from the server
     this.things = [];
     var self = this;
+    this.netconn.onack = function(acked) {
+      var idx = acked % packetData.length;
+      var data = packetData[idx];
+      packetData[idx] = null;
+      lastLag = (perfnow() - data.timestamp) / 2;
+      console.log("lastLag: %d", lastLag);
+    };
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
       var offset = 0;
+      //TODO: attempt to determine offset from serverTime
+      self.serverTime = view.getUint32(offset, true);
+      offset += 4;
       // Iterate over all netobjects in this packet.
       while (offset < view.byteLength) {
         var index = view.getUint8(offset);
@@ -299,6 +330,8 @@
     this.getNextInput = function() {
       var input = inputs[nextInputID % input_count];
       nextInputID++;
+      //TODO: keep track of server time
+      input.timestamp = perfnow();
       return input;
     };
 
@@ -317,7 +350,8 @@
         offset++;
         offset = inputs[idx].write(view, offset);
       }
-      self.netconn.sendPacket(sender_send, packet);
+      var seq = self.netconn.sendPacket(sender_send, packet);
+      packetData[seq % packetData.length] = {timestamp: perfnow()};
       lastSentInputID = nextInputID;
       //TODO: keep track of ACKed inputs
     };
@@ -397,7 +431,7 @@
      * Send a network packet updating all clients about the list of things in the game.
      */
     updateClients: function(things) {
-      var total = 0;
+      var total = 4; // server timestamp
       for (var i = 0; i < things.length; i++) {
         total += 2; // index + netID as u8s, pretty wasteful right now
         total += things[i].size();
@@ -407,6 +441,8 @@
       var packet = new ArrayBuffer(total);
       var view = new DataView(packet);
       var offset = 0;
+      view.setUint32(offset, perfnow(), true);
+      offset += 4;
       for (i = 0; i < things.length; i++) {
         view.setUint8(offset, i);
         offset++;
@@ -424,6 +460,7 @@
   scope.netconn = netconn;
   scope.netprop = netprop;
   scope.netobject = netobject;
+  scope.clientinput = clientinput;
   scope.client_net = client_net;
   scope.server_net = server_net;
   scope.server_client = server_client;

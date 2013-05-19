@@ -62,12 +62,11 @@ player.prototype.draw = function(cx) {
 };
 
 // Object to represent player input state
-function clientinput() {
-  netobject.call(this, {xmove: netprop.i8, ymove: netprop.i8,
-                        timestamp: netprop.u32});
+function input() {
+  netobject.call(this, {xmove: netprop.i8, ymove: netprop.i8});
 }
 
-clientinput.prototype = netobject.register(clientinput);
+input.prototype = netobject.register(input, clientinput);
 
 var WIDTH = 200, HEIGHT = 200;
 var server_rate = 15;
@@ -75,7 +74,7 @@ var transmit_rate = 50;
 var things = [];
 var server = new server_net();
 var client = new client_net({send: function(data) { sc.recv(data); }},
-                            clientinput);
+                            input);
 var sc = new server_client({send: client_recv});
 server.addClient(sc);
 
@@ -220,5 +219,5 @@ function keyhandler(e) {
 }
 
 addEventListener("load", setup);
-addEventListner("keydown", keyhandler);
-addEventListner("keyup", keyhandler);
+addEventListener("keydown", keyhandler);
+addEventListener("keyup", keyhandler);
