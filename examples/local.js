@@ -78,8 +78,13 @@ var client = new client_net({send: function(data) { sc.recv(data); }},
 var sc = new server_client({send: client_recv});
 server.addClient(sc);
 
+sc.oninput = function(input) {
+  handleInput(this, input);
+};
+
 var serverIntervalID = null;
 var transmitIntervalID = null;
+var clientTransmitIntervalID = null;
 var lastUpdate = performance.now();
 var packetLoss = 0;
 var latency = 0;
@@ -143,11 +148,14 @@ function setup() {
   var p = new player();
   p.x = randX();
   p.y = randY();
+  p.dir = {x:0,y:0};
   things.push(p);
+  sc.playerThing = p;
 
   lastUpdate = performance.now();
   serverIntervalID = setInterval(runServerFrame, server_rate);
   transmitIntervalID = setInterval(sendToClients, transmit_rate);
+  clientTransmitIntervalID = setInterval(sendToServer, transmit_rate);
   requestAnimationFrame(redraw);
   document.getElementById("packetloss").value = 0;
 }
@@ -166,17 +174,24 @@ function runServerFrame() {
   // Move all things.
   for (var i = 0; i < things.length; i++) {
     var t = things[i];
-    if (t instanceof player) {
-      continue;
-    }
     t.x = wraparound(t.x + t.dir.x*elapseds, 0, WIDTH);
     t.y = wraparound(t.y + t.dir.y*elapseds, 0, HEIGHT);
   }
   lastUpdate = now;
 }
 
+function handleInput(c, input) {
+  var p = c.playerThing;
+  p.dir.x = input.xmove;
+  p.dir.y = input.ymove;
+}
+
 function sendToClients() {
   server.updateClients(things);
+}
+
+function sendToServer() {
+  client.sendToServer();
 }
 
 function drawWorld(cx, things) {
@@ -202,19 +217,27 @@ function updatePacketLoss(value) {
   packetLoss = value / 100.0;
 }
 
+var lastInput = null;
+var PLAYER_SPEED = 15;
 function keyhandler(e) {
   if (e.keyCode >= 37 && e.keyCode <= 40) {
     var press = e.type == "keydown";
     var i = client.getNextInput();
-    if (e.keyCode == 37) {
-      i.xmove = press ? -5 : 0;
-    } else if (e.keyCode == 39) {
-      i.xmove = press ? 5 : 0;
-    } else if (e.keyCode == 38) {
-      i.ymove = press ? -5 : 0;
-    } else if (e.keyCode == 40) {
-      i.ymove = press ? 5 : 0;
+    if (lastInput) {
+      i.xmove = lastInput.xmove;
+      i.ymove = lastInput.ymove;
     }
+    if (e.keyCode == 37) {
+      i.xmove = press ? -PLAYER_SPEED : 0;
+    } else if (e.keyCode == 39) {
+      i.xmove = press ? PLAYER_SPEED : 0;
+    } else if (e.keyCode == 38) {
+      i.ymove = press ? -PLAYER_SPEED : 0;
+    } else if (e.keyCode == 40) {
+      i.ymove = press ? PLAYER_SPEED : 0;
+    }
+    lastInput = i;
+    e.preventDefault();
   }
 }
 

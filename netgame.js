@@ -275,7 +275,12 @@
        sender.send(data);
     }
     this.netconn = new netconn();
+    // Last time reported by the server.
     this.serverTime = 0;
+    // The local time at which the server time was received.
+    var serverTimeReceivedAt = 0;
+    // Half of the round-trip time from sending a packet to
+    // receiving an ACK for it.
     var lastLag = 0;
     var packetData = new Array(32);
 
@@ -296,13 +301,12 @@
       var data = packetData[idx];
       packetData[idx] = null;
       lastLag = (perfnow() - data.timestamp) / 2;
-      console.log("lastLag: %d", lastLag);
     };
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
       var offset = 0;
-      //TODO: attempt to determine offset from serverTime
       self.serverTime = view.getUint32(offset, true);
+      serverTimeReceivedAt = perfnow();
       offset += 4;
       // Iterate over all netobjects in this packet.
       while (offset < view.byteLength) {
@@ -330,30 +334,28 @@
     this.getNextInput = function() {
       var input = inputs[nextInputID % input_count];
       nextInputID++;
-      //TODO: keep track of server time
-      input.timestamp = perfnow();
+      input.timestamp = this.serverTime + (perfnow() - serverTimeReceivedAt) + lastLag;
       return input;
     };
 
     this.sendToServer = function() {
-      if (lastSentInputID == nextInputID) {
-        //TODO: just send an ACK if necessary
-        return;
-      }
-      //TODO: could keep this around instead of creating a new one every time.
-      var packet = new ArrayBuffer((nextInputID - lastSentInputID) * (inputs[0].size() + 1));
-      var view = new DataView(packet);
-      var offset = 0;
-      for (var i = lastSentInputID; i < nextInputID; i++) {
-        var idx = i % input_count;
-        view.setUint8(offset, inputs[idx].netID);
-        offset++;
-        offset = inputs[idx].write(view, offset);
+      var packet = null;
+      if (lastSentInputID != nextInputID) {
+        //TODO: could keep this around instead of creating a new one every time.
+        packet = new ArrayBuffer((nextInputID - lastSentInputID) * (inputs[0].size() + 1));
+        var view = new DataView(packet);
+        var offset = 0;
+        for (var i = lastSentInputID; i < nextInputID; i++) {
+          var idx = i % input_count;
+          view.setUint8(offset, inputs[idx].netID);
+          offset++;
+          offset = inputs[idx].write(view, offset);
+        }
+        lastSentInputID = nextInputID;
       }
       var seq = self.netconn.sendPacket(sender_send, packet);
-      packetData[seq % packetData.length] = {timestamp: perfnow()};
-      lastSentInputID = nextInputID;
       //TODO: keep track of ACKed inputs
+      packetData[seq % packetData.length] = {timestamp: perfnow()};
     };
   }
 
