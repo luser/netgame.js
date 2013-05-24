@@ -355,7 +355,7 @@
       var nextSendInputID = lastAckedInputID + 1;
       if (nextSendInputID != nextInputID) {
         //TODO: could keep this around instead of creating a new one every time.
-        packet = new ArrayBuffer((nextInputID - nextSendInputID) * (inputs[0].size() + 1) + 5);
+        packet = new ArrayBuffer((nextInputID - nextSendInputID) * inputs[0].size() + 6);
         var view = new DataView(packet);
         var offset = 0;
         // Send input ID range to server so it can drop duped inputs.
@@ -363,10 +363,10 @@
         offset += 4;
         view.setUint8(offset, (nextInputID - nextSendInputID));
         offset++;
+        view.setUint8(offset, input_type.prototype.netID);
+        offset++;
         for (var i = nextSendInputID; i < nextInputID; i++) {
           var idx = i % input_count;
-          view.setUint8(offset, inputs[idx].netID);
-          offset++;
           offset = inputs[idx].write(view, offset);
         }
         data.firstInputID = nextSendInputID;
@@ -406,16 +406,14 @@
       offset += 4;
       var IDcount = view.getUint8(offset);
       offset++;
+      var netID = view.getUint8(offset);
+      offset++;
+      if (netID >= netObjects.length)
+        return;
       // Iterate over all inputs in this packet.
       for (var inputID = firstInputID;
            inputID < firstInputID + IDcount && offset < view.byteLength;
            inputID++) {
-        var netID = view.getUint8(offset);
-        offset++;
-        if (offset == view.byteLength)
-          break;
-        if (netID >= netObjects.length)
-          break;
         //TODO: don't construct a new input every time
         var input = new netObjects[netID]();
         offset = input.read(view, offset);
