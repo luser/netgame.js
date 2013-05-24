@@ -39,8 +39,9 @@
         callback(this, "onack", [ack]);
       }
 
-      callback(this, "onpacket", [buf.slice(8)]);
-
+      if (buf.byteLength > 8) {
+        callback(this, "onpacket", [buf.slice(8)]);
+      }
       return true;
     },
 
@@ -260,6 +261,8 @@
     props = props || {};
     props.timestamp = netobj.u32;
     netobject.call(this, props);
+    this.acked = false;
+    this.inputID = -1;
   }
 
   clientinput.prototype = netobject.register(clientinput);
@@ -285,7 +288,7 @@
     var packetData = new Array(32);
 
     var input_count = 32;
-    var lastSentInputID = 0;
+    var nextSendInputID = 0;
     var nextInputID = 0;
     var inputs = new Array(input_count);
     if (input_type) {
@@ -301,6 +304,14 @@
       var data = packetData[idx];
       packetData[idx] = null;
       lastLag = (perfnow() - data.timestamp) / 2;
+      if ('firstInputID' in data && 'lastInputID' in data) {
+        for (var i = data.firstInputID; i <= data.lastInputID; i++) {
+          var input = inputs[i % input_count];
+          if (input.inputID == i) {
+            input.acked = true;
+          }
+        }
+      }
     };
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
@@ -333,6 +344,8 @@
      */
     this.getNextInput = function() {
       var input = inputs[nextInputID % input_count];
+      input.inputID = nextInputID;
+      input.acked = false;
       nextInputID++;
       input.timestamp = this.serverTime + (perfnow() - serverTimeReceivedAt) + lastLag;
       return input;
@@ -340,22 +353,29 @@
 
     this.sendToServer = function() {
       var packet = null;
-      if (lastSentInputID != nextInputID) {
+      var data = {timestamp: perfnow()};
+      if (nextSendInputID != nextInputID) {
         //TODO: could keep this around instead of creating a new one every time.
-        packet = new ArrayBuffer((nextInputID - lastSentInputID) * (inputs[0].size() + 1));
+        packet = new ArrayBuffer((nextInputID - nextSendInputID) * (inputs[0].size() + 1) + 5);
         var view = new DataView(packet);
         var offset = 0;
-        for (var i = lastSentInputID; i < nextInputID; i++) {
+        // Send input ID range to server so it can drop duped inputs.
+        view.setUint32(offset, nextSendInputID, true);
+        offset += 4;
+        view.setUint8(offset, (nextInputID - nextSendInputID));
+        offset++;
+        for (var i = nextSendInputID; i < nextInputID; i++) {
           var idx = i % input_count;
           view.setUint8(offset, inputs[idx].netID);
           offset++;
           offset = inputs[idx].write(view, offset);
         }
-        lastSentInputID = nextInputID;
+        data.firstInputID = nextSendInputID;
+        data.lastInputID = nextInputID - 1;
+        nextSendInputID = nextInputID;
       }
       var seq = self.netconn.sendPacket(sender_send, packet);
-      //TODO: keep track of ACKed inputs
-      packetData[seq % packetData.length] = {timestamp: perfnow()};
+      packetData[seq % packetData.length] = data;
     };
   }
 
@@ -382,6 +402,10 @@
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
       var offset = 0;
+      var firstInputID = view.getUint32(offset, true);
+      offset += 4;
+      var IDcount = view.getUint8(offset);
+      offset++;
       // Iterate over all inputs in this packet.
       while (offset < view.byteLength) {
         var netID = view.getUint8(offset);

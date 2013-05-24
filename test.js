@@ -41,10 +41,18 @@ test("BackAndForth", function() {
   client.onack = function(ack) {
     lastClientAck = ack;
   };
+  var clientgotpacket = false;
+  client.onpacket = function(buf) {
+    clientgotpacket = true;
+  };
   var server = new netconn();
   var lastServerAck = null;
   server.onack = function(ack) {
     lastServerAck = ack;
+  };
+  var servergotpacket = false;
+  server.onpacket = function(buf) {
+    servergotpacket = true;
   };
   function client_recv(buf) {
     client.processPacket(buf);
@@ -61,6 +69,8 @@ test("BackAndForth", function() {
   equals(lastClientAck, 1);
   client.sendPacket(server_recv);
   equals(lastServerAck, 1);
+  ok(!clientgotpacket);
+  ok(!servergotpacket);
 });
 
 test("PacketData", function() {
