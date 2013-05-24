@@ -304,7 +304,7 @@ test("client_net", function() {
   myinput.prototype = netobject.register(myinput);
 
   var server = new server_net();
-  var sclient = new server_client({send: function(data) {}}); // server doesn't send any data.
+  var sclient = new server_client({send: function(data) { client.recv(data); }});
   var client = new client_net({send: function(data) { sclient.recv(data); }}, myinput);
   server.addClient(sclient);
 

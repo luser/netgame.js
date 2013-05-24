@@ -261,7 +261,6 @@
     props = props || {};
     props.timestamp = netobj.u32;
     netobject.call(this, props);
-    this.acked = false;
     this.inputID = -1;
   }
 
@@ -287,8 +286,13 @@
     var lastLag = 0;
     var packetData = new Array(32);
 
+    // We store a ring buffer of input_count inputs and send them repeatedly until
+    // the server acks them or we wrap the buffer so that they have a better chance
+    // of surviving packet loss.
     var input_count = 32;
-    var nextSendInputID = 0;
+    // The last input that the server acked.
+    var lastAckedInputID = -1;
+    // The ID of the next input the client can use.
     var nextInputID = 0;
     var inputs = new Array(input_count);
     if (input_type) {
@@ -305,12 +309,7 @@
       packetData[idx] = null;
       lastLag = (perfnow() - data.timestamp) / 2;
       if ('firstInputID' in data && 'lastInputID' in data) {
-        for (var i = data.firstInputID; i <= data.lastInputID; i++) {
-          var input = inputs[i % input_count];
-          if (input.inputID == i) {
-            input.acked = true;
-          }
-        }
+        lastAckedInputID = data.lastInputID;
       }
     };
     this.netconn.onpacket = function(packet) {
@@ -345,7 +344,6 @@
     this.getNextInput = function() {
       var input = inputs[nextInputID % input_count];
       input.inputID = nextInputID;
-      input.acked = false;
       nextInputID++;
       input.timestamp = this.serverTime + (perfnow() - serverTimeReceivedAt) + lastLag;
       return input;
@@ -354,6 +352,7 @@
     this.sendToServer = function() {
       var packet = null;
       var data = {timestamp: perfnow()};
+      var nextSendInputID = lastAckedInputID + 1;
       if (nextSendInputID != nextInputID) {
         //TODO: could keep this around instead of creating a new one every time.
         packet = new ArrayBuffer((nextInputID - nextSendInputID) * (inputs[0].size() + 1) + 5);
@@ -372,7 +371,6 @@
         }
         data.firstInputID = nextSendInputID;
         data.lastInputID = nextInputID - 1;
-        nextSendInputID = nextInputID;
       }
       var seq = self.netconn.sendPacket(sender_send, packet);
       packetData[seq % packetData.length] = data;
@@ -398,6 +396,8 @@
     this.sender = function(data) { sender.send(data); };
     this.netconn = new netconn();
 
+    // The last input ID this client sent.
+    var lastReceivedInputID = -1;
     var self = this;
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
@@ -407,7 +407,9 @@
       var IDcount = view.getUint8(offset);
       offset++;
       // Iterate over all inputs in this packet.
-      while (offset < view.byteLength) {
+      for (var inputID = firstInputID;
+           inputID < firstInputID + IDcount && offset < view.byteLength;
+           inputID++) {
         var netID = view.getUint8(offset);
         offset++;
         if (offset == view.byteLength)
@@ -417,8 +419,12 @@
         //TODO: don't construct a new input every time
         var input = new netObjects[netID]();
         offset = input.read(view, offset);
-        callback(self, "oninput", [input]);
+        // Don't process duplicate inputs.
+        if (inputID > lastReceivedInputID) {
+          callback(self, "oninput", [input]);
+        }
       }
+      lastReceivedInputID = firstInputID + IDcount - 1;
     };
   }
   server_client.prototype = {
