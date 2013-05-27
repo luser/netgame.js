@@ -73,7 +73,7 @@ var server_rate = 15;
 var transmit_rate = 50;
 var things = [];
 var server = new server_net();
-var client = new client_net({send: function(data) { sc.recv(data); }},
+var client = new client_net({send: server_recv},
                             input);
 var sc = new server_client({send: client_recv});
 server.addClient(sc);
@@ -88,32 +88,50 @@ var clientTransmitIntervalID = null;
 var lastUpdate = performance.now();
 var packetLoss = 0;
 var latency = 0;
-var CLIENT_PACKET_SAMPLES = 20;
+var PACKET_SAMPLES = 20;
 var clientPackets = [];
+var serverPackets = [];
 var lastRateUpdate = 0;
 
+function server_recv(data) {
+  updatePackets(data.byteLength, serverPackets);
+  sc.recv(data);
+};
+
 function client_recv(data) {
-  updateClientDataRate(data.byteLength);
+  updatePackets(data.byteLength, clientPackets);
   if (Math.random() > packetLoss) {
     setTimeout(function() { client.recv(data); }, latency);
   }
 }
 
-function updateClientDataRate(bytes) {
+function updatePackets(bytes, packets, id) {
   var now = performance.now();
-  clientPackets.push([now, bytes]);
-  if (clientPackets.length > CLIENT_PACKET_SAMPLES) {
-    clientPackets.shift();
+  packets.push([now, bytes]);
+  if (packets.length > PACKET_SAMPLES) {
+    packets.shift();
   }
-  if (clientPackets.length == CLIENT_PACKET_SAMPLES && (now - lastRateUpdate) > 1000) {
+}
+
+function updateDataRate(packets, id, now) {
+  if (packets.length < PACKET_SAMPLES)
+    return;
+
+  var elapsed = (now - packets[0][0]) / 1000;
+  var total = 0;
+  for (var i = 0; i < packets.length; i++) {
+    total += packets[i][1];
+  }
+  var rate = ((total * 8) / 1024) / elapsed;
+  document.getElementById(id).firstChild.textContent = Math.round(rate * 100) / 100;
+}
+
+function updateDataRates() {
+  var now = performance.now();
+  if ((now - lastRateUpdate) > 1000) {
     lastRateUpdate = now;
-    var elapsed = (now - clientPackets[0][0]) / 1000;
-    var total = 0;
-    for (var i = 0; i < clientPackets.length; i++) {
-      total += clientPackets[i][1];
-    }
-    var rate = ((total * 8) / 1024) / elapsed;
-    document.getElementById("client-rate").firstChild.textContent = Math.round(rate * 100) / 100;
+    updateDataRate(serverPackets, "server-rate", now);
+    updateDataRate(clientPackets, "client-rate", now);
   }
 }
 
@@ -204,6 +222,7 @@ function drawWorld(cx, things) {
 function redraw() {
   drawWorld(document.getElementById("server").getContext("2d"), things);
   drawWorld(document.getElementById("client").getContext("2d"), client.things);
+  updateDataRates();
   requestAnimationFrame(redraw);
 }
 
