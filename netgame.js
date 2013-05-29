@@ -1,5 +1,8 @@
 "use strict";
 (function(scope) {
+  var perfnow = window && 'performance' in window && 'now' in window.performance
+    ? function() { return Math.round(window.performance.now()); } : Date.now;
+
   function callback(thing, method, args) {
     if(method in thing && 'function' === typeof thing[method]) {
       thing[method].apply(thing, args);
@@ -36,8 +39,9 @@
         callback(this, "onack", [ack]);
       }
 
-      callback(this, "onpacket", [buf.slice(8)]);
-
+      if (buf.byteLength > 8) {
+        callback(this, "onpacket", [buf.slice(8)]);
+      }
       return true;
     },
 
@@ -45,6 +49,7 @@
      * Construct a packet and send it by calling
      * sender, passing it the ArrayBuffer of the
      * packet's contents. data is the packet payload as an ArrayBuffer.
+     * Returns the sequence number of the packet sent.
      */
     sendPacket: function(sender, data) {
       var HEADER_SIZE = 8;
@@ -64,6 +69,7 @@
         u8buf.set(u8data, HEADER_SIZE);
       }
       sender(buf);
+      return seq;
     }
   };
 
@@ -231,34 +237,62 @@
 
   /*
    * Register a constructor as a netobject, and return a prototype
-   * for it.
+   * for it. If the class derives from a subclass of netobject, pass
+   * the parent class as the second parameter.
    *
    * Example:
    *   var myobject() { netobject.call(this, {a: netobject.u32; }); }
    *   myobject.prototype = netobject.register(myobject);
    */
-  netobject.register = function(cls) {
+  netobject.register = function(cls, parent) {
     var netID = netObjects.length;
     netObjects.push(cls);
-    return Object.create(netobject.prototype,
+    return Object.create(parent || netobject.prototype,
                          {constructor: {value: cls},
                           netID: {value: netID}
                          });
   };
 
   /*
+   * clientinput is a subclass of netobject used to store input
+   * from the client for transmission to the server.
+   */
+  function clientinput(props) {
+    props = props || {};
+    props.timestamp = netobj.u32;
+    netobject.call(this, props);
+    this.inputID = -1;
+  }
+
+  clientinput.prototype = netobject.register(clientinput);
+
+  /*
    * client_net represents the client side of a game connection. sender is an
    * object whose send method accepts an ArrayBuffer of data to send.
-   * input_type is a constructor that is a subclass of netobject that represents
-   * input from the player.
+   * input_type is a constructor that is a subclass of clientinput that
+   * represents input from the player.
    */
   function client_net(sender, input_type) {
     function sender_send(data) {
        sender.send(data);
     }
     this.netconn = new netconn();
+    // Last time reported by the server.
+    this.serverTime = 0;
+    // The local time at which the server time was received.
+    var serverTimeReceivedAt = 0;
+    // Half of the round-trip time from sending a packet to
+    // receiving an ACK for it.
+    var lastLag = 0;
+    var packetData = new Array(32);
+
+    // We store a ring buffer of input_count inputs and send them repeatedly until
+    // the server acks them or we wrap the buffer so that they have a better chance
+    // of surviving packet loss.
     var input_count = 32;
-    var lastSentInputID = 0;
+    // The last input that the server acked.
+    var lastAckedInputID = -1;
+    // The ID of the next input the client can use.
     var nextInputID = 0;
     var inputs = new Array(input_count);
     if (input_type) {
@@ -269,9 +303,21 @@
     // Local copies of world things mirrored from the server
     this.things = [];
     var self = this;
+    this.netconn.onack = function(acked) {
+      var idx = acked % packetData.length;
+      var data = packetData[idx];
+      packetData[idx] = null;
+      lastLag = (perfnow() - data.timestamp) / 2;
+      if ('firstInputID' in data && 'lastInputID' in data) {
+        lastAckedInputID = data.lastInputID;
+      }
+    };
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
       var offset = 0;
+      self.serverTime = view.getUint32(offset, true);
+      serverTimeReceivedAt = perfnow();
+      offset += 4;
       // Iterate over all netobjects in this packet.
       while (offset < view.byteLength) {
         var index = view.getUint8(offset);
@@ -297,28 +343,37 @@
      */
     this.getNextInput = function() {
       var input = inputs[nextInputID % input_count];
+      input.inputID = nextInputID;
       nextInputID++;
+      input.timestamp = this.serverTime + (perfnow() - serverTimeReceivedAt) + lastLag;
       return input;
     };
 
     this.sendToServer = function() {
-      if (lastSentInputID == nextInputID) {
-        //TODO: just send an ACK if necessary
-        return;
-      }
-      //TODO: could keep this around instead of creating a new one every time.
-      var packet = new ArrayBuffer((nextInputID - lastSentInputID) * (inputs[0].size() + 1));
-      var view = new DataView(packet);
-      var offset = 0;
-      for (var i = lastSentInputID; i < nextInputID; i++) {
-        var idx = i % input_count;
-        view.setUint8(offset, inputs[idx].netID);
+      var packet = null;
+      var data = {timestamp: perfnow()};
+      var nextSendInputID = lastAckedInputID + 1;
+      if (nextSendInputID != nextInputID) {
+        //TODO: could keep this around instead of creating a new one every time.
+        packet = new ArrayBuffer((nextInputID - nextSendInputID) * inputs[0].size() + 6);
+        var view = new DataView(packet);
+        var offset = 0;
+        // Send input ID range to server so it can drop duped inputs.
+        view.setUint32(offset, nextSendInputID, true);
+        offset += 4;
+        view.setUint8(offset, (nextInputID - nextSendInputID));
         offset++;
-        offset = inputs[idx].write(view, offset);
+        view.setUint8(offset, input_type.prototype.netID);
+        offset++;
+        for (var i = nextSendInputID; i < nextInputID; i++) {
+          var idx = i % input_count;
+          offset = inputs[idx].write(view, offset);
+        }
+        data.firstInputID = nextSendInputID;
+        data.lastInputID = nextInputID - 1;
       }
-      self.netconn.sendPacket(sender_send, packet);
-      lastSentInputID = nextInputID;
-      //TODO: keep track of ACKed inputs
+      var seq = self.netconn.sendPacket(sender_send, packet);
+      packetData[seq % packetData.length] = data;
     };
   }
 
@@ -341,23 +396,33 @@
     this.sender = function(data) { sender.send(data); };
     this.netconn = new netconn();
 
+    // The last input ID this client sent.
+    var lastReceivedInputID = -1;
     var self = this;
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
       var offset = 0;
+      var firstInputID = view.getUint32(offset, true);
+      offset += 4;
+      var IDcount = view.getUint8(offset);
+      offset++;
+      var netID = view.getUint8(offset);
+      offset++;
+      if (netID >= netObjects.length)
+        return;
       // Iterate over all inputs in this packet.
-      while (offset < view.byteLength) {
-        var netID = view.getUint8(offset);
-        offset++;
-        if (offset == view.byteLength)
-          break;
-        if (netID >= netObjects.length)
-          break;
+      for (var inputID = firstInputID;
+           inputID < firstInputID + IDcount && offset < view.byteLength;
+           inputID++) {
         //TODO: don't construct a new input every time
         var input = new netObjects[netID]();
         offset = input.read(view, offset);
-        callback(self, "oninput", [input]);
+        // Don't process duplicate inputs.
+        if (inputID > lastReceivedInputID) {
+          callback(self, "oninput", [input]);
+        }
       }
+      lastReceivedInputID = firstInputID + IDcount - 1;
     };
   }
   server_client.prototype = {
@@ -396,7 +461,7 @@
      * Send a network packet updating all clients about the list of things in the game.
      */
     updateClients: function(things) {
-      var total = 0;
+      var total = 4; // server timestamp
       for (var i = 0; i < things.length; i++) {
         total += 2; // index + netID as u8s, pretty wasteful right now
         total += things[i].size();
@@ -406,6 +471,8 @@
       var packet = new ArrayBuffer(total);
       var view = new DataView(packet);
       var offset = 0;
+      view.setUint32(offset, perfnow(), true);
+      offset += 4;
       for (i = 0; i < things.length; i++) {
         view.setUint8(offset, i);
         offset++;
@@ -423,6 +490,7 @@
   scope.netconn = netconn;
   scope.netprop = netprop;
   scope.netobject = netobject;
+  scope.clientinput = clientinput;
   scope.client_net = client_net;
   scope.server_net = server_net;
   scope.server_client = server_client;
