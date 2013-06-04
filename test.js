@@ -199,6 +199,45 @@ test("netprop.i8", function() {
   equals(p2.value, 123);
 });
 
+test("netprop.f32", function() {
+  // Work around double->float truncation.
+  var tmp = new Float32Array([1234.5678, 8765.4321]);
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var p = new netprop(netprop.f32);
+  p.value = tmp[0];
+  var offset = p.write(view, 0);
+  p.value = tmp[1];
+  offset = p.write(view, offset);
+  equals(offset, 8);
+
+  var p2 = new netprop(netprop.f32);
+  offset = p2.read(view, 0);
+  equals(p2.value, tmp[0]);
+  offset = p2.read(view, offset);
+  equals(offset, 8);
+  equals(p2.value, tmp[1]);
+});
+
+test("netprop.f64", function() {
+  var tmp = new Float64Array([1234.5678, 8765.4321]);
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var p = new netprop(netprop.f64);
+  p.value = tmp[0];
+  var offset = p.write(view, 0);
+  p.value = tmp[1];
+  offset = p.write(view, offset);
+  equals(offset, 16);
+
+  var p2 = new netprop(netprop.f64);
+  offset = p2.read(view, 0);
+  equals(p2.value, tmp[0]);
+  offset = p2.read(view, offset);
+  equals(offset, 16);
+  equals(p2.value, tmp[1]);
+});
+
 test("netobject", function() {
   function testobj() {
     netobject.call(this, {a: netprop.u8, b: netprop.u32});

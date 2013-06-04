@@ -80,6 +80,8 @@
    * netprop.{u8,i8}: unsigned or signed 8-bit value.
    * netprop.{u16,i16}: unsigned or signed 16-bit value.
    * netprop.{u32,i32}: unsigned or signed 32-bit value.
+   * netprop.f32: 32-bit float
+   * netprop.f64: 64-bit float
    */
   function netprop(type, name, default_value) {
     this.type = type;
@@ -123,6 +125,18 @@
   function write_i32(dataview, offset) {
     dataview.setInt32(offset, this.value, true);
   }
+  function read_f32(dataview, offset) {
+    this.value = dataview.getFloat32(offset, true);
+  }
+  function write_f32(dataview, offset) {
+    dataview.setFloat32(offset, this.value, true);
+  }
+  function read_f64(dataview, offset) {
+    this.value = dataview.getFloat64(offset, true);
+  }
+  function write_f64(dataview, offset) {
+    dataview.setFloat64(offset, this.value, true);
+  }
 
   // Built-in types.
   netprop.u8 =  {size: 1, read: read_u8, write: write_u8,
@@ -137,6 +151,11 @@
                  toString: function() { return "netprop.u32"; } };
   netprop.i32 = {size: 4, read: read_i32, write: write_i32,
                  toString: function() { return "netprop.i32"; } };
+  netprop.f32 = {size: 4, read: read_f32, write: write_f32,
+                 toString: function() { return "netprop.f32"; } };
+  netprop.f64 = {size: 8, read: read_f64, write: write_f64,
+                 toString: function() { return "netprop.f64"; } };
+
 
   netprop.prototype = {
     toString: function() {
