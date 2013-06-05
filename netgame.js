@@ -83,101 +83,145 @@
    * netprop.f32: 32-bit float
    * netprop.f64: 64-bit float
    */
-  function netprop(type, name, default_value) {
-    this.type = type;
-    this.name = name || "";
-    this.value = default_value || 0;
+  function netprop(name) {
+    this.name = name;
+    this.str = "netprop";
   }
-
-  function read_u8(dataview, offset) {
-    this.value = dataview.getUint8(offset, true);
-  }
-  function write_u8(dataview, offset) {
-    dataview.setUint8(offset, this.value, true);
-  }
-  function read_i8(dataview, offset) {
-    this.value = dataview.getInt8(offset, true);
-  }
-  function write_i8(dataview, offset) {
-    dataview.setInt8(offset, this.value, true);
-  }
-  function read_u16(dataview, offset) {
-    this.value = dataview.getUint16(offset, true);
-  }
-  function write_u16(dataview, offset) {
-    dataview.setUint16(offset, this.value, true);
-  }
-  function read_i16(dataview, offset) {
-    this.value = dataview.getInt16(offset, true);
-  }
-  function write_i16(dataview, offset) {
-    dataview.setInt16(offset, this.value, true);
-  }
-  function read_u32(dataview, offset) {
-    this.value = dataview.getUint32(offset, true);
-  }
-  function write_u32(dataview, offset) {
-    dataview.setUint32(offset, this.value, true);
-  }
-  function read_i32(dataview, offset) {
-    this.value = dataview.getInt32(offset, true);
-  }
-  function write_i32(dataview, offset) {
-    dataview.setInt32(offset, this.value, true);
-  }
-  function read_f32(dataview, offset) {
-    this.value = dataview.getFloat32(offset, true);
-  }
-  function write_f32(dataview, offset) {
-    dataview.setFloat32(offset, this.value, true);
-  }
-  function read_f64(dataview, offset) {
-    this.value = dataview.getFloat64(offset, true);
-  }
-  function write_f64(dataview, offset) {
-    dataview.setFloat64(offset, this.value, true);
-  }
-
-  // Built-in types.
-  netprop.u8 =  {size: 1, read: read_u8, write: write_u8,
-                 toString: function() { return "netprop.u8"; } };
-  netprop.i8 =  {size: 1, read: read_i8, write: write_i8,
-                 toString: function() { return "netprop.i8"; } };
-  netprop.u16 = {size: 2, read: read_u16, write: write_u16,
-                 toString: function() { return "netprop.u16"; } };
-  netprop.i16 = {size: 2, read: read_i16, write: write_i16,
-                 toString: function() { return "netprop.i16"; } };
-  netprop.u32 = {size: 4, read: read_u32, write: write_u32,
-                 toString: function() { return "netprop.u32"; } };
-  netprop.i32 = {size: 4, read: read_i32, write: write_i32,
-                 toString: function() { return "netprop.i32"; } };
-  netprop.f32 = {size: 4, read: read_f32, write: write_f32,
-                 toString: function() { return "netprop.f32"; } };
-  netprop.f64 = {size: 8, read: read_f64, write: write_f64,
-                 toString: function() { return "netprop.f64"; } };
-
 
   netprop.prototype = {
     toString: function() {
-      return "netprop(" + this.type + "," + this.name + "," + this.default_value + ")";
+      return this.str;
     },
     /*
      * Read this property from dataview, starting at offset.
      * Return the new offset after reading.
      */
     read: function(dataview, offset) {
-      this.type.read.apply(this, [dataview, offset]);
-      return offset + this.type.size;
+      this._read(dataview, offset);
+      return offset + this.size();
     },
     /*
      * Write this property to dataview, starting at offset.
      * Return the new offset after writing.
      */
     write: function(dataview, offset) {
-      this.type.write.apply(this, [dataview, offset]);
-      return offset + this.type.size;
+      this._write(dataview, offset);
+      return offset + this.size();
     }
   };
+  // Built-in types.
+  netprop.u8 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 1; };
+    this._read = function (dataview, offset) {
+      this.value = dataview.getUint8(offset, true);
+    };
+    this._write = function(dataview, offset) {
+      dataview.setUint8(offset, this.value, true);
+    };
+    this.str = "netprop.u8";
+  };
+  netprop.u8.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.u8}});
+  netprop.i8 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 1; };
+    this._read = function read_i8(dataview, offset) {
+      this.value = dataview.getInt8(offset, true);
+    };
+    this._write = function write_i8(dataview, offset) {
+      dataview.setInt8(offset, this.value, true);
+    };
+    this.str = "netprop.i8";
+  };
+  netprop.i8.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.i8}});
+  netprop.u16 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 2; };
+    this._read = function read_u16(dataview, offset) {
+      this.value = dataview.getUint16(offset, true);
+    };
+    this._write = function write_u16(dataview, offset) {
+      dataview.setUint16(offset, this.value, true);
+    };
+    this.str = "netprop.u16";
+  };
+  netprop.u16.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.u16}});
+  netprop.i16 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 2; };
+    this._read = function read_i16(dataview, offset) {
+      this.value = dataview.getInt16(offset, true);
+    };
+    this._write = function write_i16(dataview, offset) {
+      dataview.setInt16(offset, this.value, true);
+    };
+    this.str = "netprop.i16";
+  };
+  netprop.i16.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.i16}});
+  netprop.u32 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 4; };
+    this._read = function read_u32(dataview, offset) {
+      this.value = dataview.getUint32(offset, true);
+    };
+    this._write = function write_u32(dataview, offset) {
+      dataview.setUint32(offset, this.value, true);
+    };
+    this.str = "netprop.u32";
+  };
+  netprop.u32.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.u32}});
+  netprop.i32 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 4; };
+    this._read = function read_i32(dataview, offset) {
+      this.value = dataview.getInt32(offset, true);
+    };
+    this._write = function write_i32(dataview, offset) {
+      dataview.setInt32(offset, this.value, true);
+    };
+    this.str = "netprop.i32";
+  };
+  netprop.i32.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.i32}});
+  netprop.f32 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 4; };
+    this._read = function read_f32(dataview, offset) {
+      this.value = dataview.getFloat32(offset, true);
+    };
+    this._write = function write_f32(dataview, offset) {
+      dataview.setFloat32(offset, this.value, true);
+    };
+    this.str = "netprop.f32";
+  };
+  netprop.f32.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.f32}});
+  netprop.f64 = function(name) {
+    netprop.call(this, name);
+    this.value = 0;
+    this.size = function() { return 8; };
+    this._read = function read_f64(dataview, offset) {
+      this.value = dataview.getFloat64(offset, true);
+    };
+    this._write = function write_f64(dataview, offset) {
+      dataview.setFloat64(offset, this.value, true);
+    };
+    this.str = "netprop.f64";
+  };
+  netprop.f64.prototype = Object.create(netprop.prototype,
+                                       {constructor: {value: netprop.f64}});
 
   /*
    * List of objects that have subclassed netobject. Indices in this array
@@ -201,7 +245,7 @@
     var netprops = [];
     var keys = Object.keys(props).sort();
     function defineProp(obj, name) {
-      var np = new netprop(props[name], name);
+      var np = new props[name](name);
       netprops.push(np);
       Object.defineProperty(obj, name, {
                               enumerable: true,
@@ -248,7 +292,7 @@
     this.size = function() {
       var total = 0;
       for (var i = 0; i < netprops.length; i++) {
-        total += netprops[i].type.size;
+        total += netprops[i].size();
       }
       return total;
     };

@@ -94,14 +94,14 @@ test("PacketData", function() {
 test("netprop.u32", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.u32);
+  var p = new netprop.u32();
   p.value = 0xABCDEF12;
   var offset = p.write(view, 0);
   p.value = 0xFFFFFFFF;
   offset = p.write(view, offset);
   equals(offset, 8);
 
-  var p2 = new netprop(netprop.u32);
+  var p2 = new netprop.u32();
   offset = p2.read(view, 0);
   equals(p2.value, 0xABCDEF12);
   offset = p2.read(view, offset);
@@ -112,14 +112,14 @@ test("netprop.u32", function() {
 test("netprop.i32", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.i32);
+  var p = new netprop.i32();
   p.value = -12345678;
   var offset = p.write(view, 0);
   p.value = 12345678;
   offset = p.write(view, offset);
   equals(offset, 8);
 
-  var p2 = new netprop(netprop.i32);
+  var p2 = new netprop.i32();
   offset = p2.read(view, 0);
   equals(p2.value, -12345678);
   offset = p2.read(view, offset);
@@ -130,14 +130,14 @@ test("netprop.i32", function() {
 test("netprop.u16", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.u16);
+  var p = new netprop.u16();
   p.value = 0xABCD;
   var offset = p.write(view, 0);
   p.value = 0xFFFF;
   offset = p.write(view, offset);
   equals(offset, 4);
 
-  var p2 = new netprop(netprop.u16);
+  var p2 = new netprop.u16();
   offset = p2.read(view, 0);
   equals(p2.value, 0xABCD);
   offset = p2.read(view, offset);
@@ -148,14 +148,14 @@ test("netprop.u16", function() {
 test("netprop.i16", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.i16);
+  var p = new netprop.i16();
   p.value = -12345;
   var offset = p.write(view, 0);
   p.value = 12345;
   offset = p.write(view, offset);
   equals(offset, 4);
 
-  var p2 = new netprop(netprop.i16);
+  var p2 = new netprop.i16();
   offset = p2.read(view, 0);
   equals(p2.value, -12345);
   offset = p2.read(view, offset);
@@ -166,14 +166,14 @@ test("netprop.i16", function() {
 test("netprop.u8", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.u8);
+  var p = new netprop.u8();
   p.value = 0xAB;
   var offset = p.write(view, 0);
   p.value = 0xFF;
   offset = p.write(view, offset);
   equals(offset, 2);
 
-  var p2 = new netprop(netprop.u8);
+  var p2 = new netprop.u8();
   offset = p2.read(view, 0);
   equals(p2.value, 0xAB);
   offset = p2.read(view, offset);
@@ -184,14 +184,14 @@ test("netprop.u8", function() {
 test("netprop.i8", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.i8);
+  var p = new netprop.i8();
   p.value = -123;
   var offset = p.write(view, 0);
   p.value = 123;
   offset = p.write(view, offset);
   equals(offset, 2);
 
-  var p2 = new netprop(netprop.i8);
+  var p2 = new netprop.i8();
   offset = p2.read(view, 0);
   equals(p2.value, -123);
   offset = p2.read(view, offset);
@@ -204,14 +204,14 @@ test("netprop.f32", function() {
   var tmp = new Float32Array([1234.5678, 8765.4321]);
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.f32);
+  var p = new netprop.f32();
   p.value = tmp[0];
   var offset = p.write(view, 0);
   p.value = tmp[1];
   offset = p.write(view, offset);
   equals(offset, 8);
 
-  var p2 = new netprop(netprop.f32);
+  var p2 = new netprop.f32();
   offset = p2.read(view, 0);
   equals(p2.value, tmp[0]);
   offset = p2.read(view, offset);
@@ -223,14 +223,14 @@ test("netprop.f64", function() {
   var tmp = new Float64Array([1234.5678, 8765.4321]);
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
-  var p = new netprop(netprop.f64);
+  var p = new netprop.f64();
   p.value = tmp[0];
   var offset = p.write(view, 0);
   p.value = tmp[1];
   offset = p.write(view, offset);
   equals(offset, 16);
 
-  var p2 = new netprop(netprop.f64);
+  var p2 = new netprop.f64();
   offset = p2.read(view, 0);
   equals(p2.value, tmp[0]);
   offset = p2.read(view, offset);
