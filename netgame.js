@@ -224,6 +224,45 @@
                                        {constructor: {value: netprop.f64}});
 
   /*
+   * netprop.array is a factory function for creating netprop array types.
+   * Pass in the element type to return a constructor.
+   */
+  netprop.array = function(type) {
+    function netprop_array(name) {
+      var t = new type;
+      netprop.call(this, name);
+      this.value = [];
+      this.size = function() {
+        return 4 + this.value.length * t.size();
+      };
+
+      this._read = function(dataview, offset) {
+        this.value.length = dataview.getUint32(offset, true);
+        offset += 4;
+        for (var i = 0; i < this.value.length; i++) {
+          t.read(dataview, offset);
+          this.value[i] = t.value;
+          offset += t.size();
+        }
+      };
+      this._write = function(dataview, offset) {
+        //TODO: support writing a shorter byte size for short arrays
+        dataview.setUint32(offset, this.value.length, true);
+        offset += 4;
+        for (var i = 0; i < this.value.length; i++) {
+          t.value = this.value[i];
+          t.write(dataview, offset);
+          offset += t.size();
+        }
+      };
+      this.str = "netprop.array(" + t.str + ")";
+    }
+    netprop_array.prototype = Object.create(netprop.prototype,
+                                            {constructor: {value: netprop_array}});
+    return netprop_array;
+  };
+
+  /*
    * List of objects that have subclassed netobject. Indices in this array
    * are passed across the network as tags, so they must match on both sides of
    * the connection.

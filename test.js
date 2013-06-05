@@ -238,6 +238,41 @@ test("netprop.f64", function() {
   equals(p2.value, tmp[1]);
 });
 
+test("netprop.array", function() {
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+
+  var u8array = netprop.array(netprop.u8);
+  var p = new u8array;
+  p.value.push(0);
+  p.value.push(1);
+  p.value.push(100);
+  p.value.push(255);
+  var offset = p.write(view, 0);
+  p.value.length = 2;
+  p.value[0] = 255;
+  p.value[1] = 0;
+  offset = p.write(view, offset);
+  equals(offset, 14);
+  p.value.length = 0;
+  offset = p.write(view, offset);
+  equals(offset, 18);
+
+  var p2 = new u8array;
+  offset = p2.read(view, 0);
+  equals(p2.value.length, 4);
+  equals(p2.value[0], 0);
+  equals(p2.value[1], 1);
+  equals(p2.value[2], 100);
+  equals(p2.value[3], 255);
+  offset = p2.read(view, offset);
+  equals(p2.value.length, 2);
+  equals(p2.value[0], 255);
+  equals(p2.value[1], 0);
+  offset = p2.read(view, offset);
+  equals(p2.value.length, 0);
+});
+
 test("netobject", function() {
   function testobj() {
     netobject.call(this, {a: netprop.u8, b: netprop.u32});
@@ -255,6 +290,26 @@ test("netobject", function() {
   equals(t2.read(view, 0), 5);
   equals(t2.a, t.a);
   equals(t2.b, t.b);
+});
+
+test("netobject with array", function() {
+  function testobj() {
+    netobject.call(this, {a: netprop.u8, b: netprop.array(netprop.u32)});
+  }
+  testobj.prototype = netobject.register(testobj);
+
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var t = new testobj();
+  t.a = 255;
+  t.b.push(0xABCD1234);
+  t.b.push(0xFFFFFFFF);
+  equals(t.write(view, 0), 13);
+
+  var t2 = new testobj();
+  equals(t2.read(view, 0), 13);
+  equals(t2.a, t.a);
+  deepEqual(t2.b, t.b);
 });
 
 test("netobject_inherit", function() {
