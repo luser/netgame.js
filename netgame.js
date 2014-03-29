@@ -223,21 +223,45 @@
   netprop.f64.prototype = Object.create(netprop.prototype,
                                        {constructor: {value: netprop.f64}});
 
+  // Map types to their respective typed array types
+  var arrayTypes = [
+    [netprop.u8, Uint8Array],
+    [netprop.i8, Int8Array],
+    [netprop.u16, Uint16Array],
+    [netprop.i16, Int16Array],
+    [netprop.u32, Uint32Array],
+    [netprop.i32, Int32Array],
+    [netprop.f32, Float32Array],
+    [netprop.f64, Float64Array]
+  ];
+  for (var i = 0; i < arrayTypes.length; i++) {
+      arrayTypes[i][0].arrayType = arrayTypes[i][1];
+  }
+
   /*
    * netprop.array is a factory function for creating netprop array types.
    * Pass in the element type to return a constructor.
    */
-  netprop.array = function(type) {
+  netprop.array = function(type, size) {
+    size = size || 0;
     function netprop_array(name) {
       var t = new type;
       netprop.call(this, name);
-      this.value = [];
+      this.value = 'arrayType' in type ? new type.arrayType(size) : [];
       this.size = function() {
         return 4 + this.value.length * t.size();
       };
 
       this._read = function(dataview, offset) {
-        this.value.length = dataview.getUint32(offset, true);
+        var length = dataview.getUint32(offset, true);
+        if (length != this.value.length) {
+          if (this.value instanceof Array) {
+              this.value.length = length;
+          } else {
+              this.value = new type.arrayType(length);
+          }
+        }
+
         offset += 4;
         for (var i = 0; i < this.value.length; i++) {
           t.read(dataview, offset);
@@ -432,6 +456,7 @@
           break;
         if (netID >= netObjects.length)
           break;
+        //TODO: cache netobjects so we don't allocate every time?
         var obj = new netObjects[netID]();
         offset = obj.read(view, offset);
         self.things[index] = obj;

@@ -242,35 +242,37 @@ test("netprop.array", function() {
   var buf = new ArrayBuffer(32);
   var view = new DataView(buf);
 
-  var u8array = netprop.array(netprop.u8);
-  var p = new u8array;
-  p.value.push(0);
-  p.value.push(1);
-  p.value.push(100);
-  p.value.push(255);
+  var u8array4 = netprop.array(netprop.u8, 4);
+  var p = new u8array4;
+  p.value[0] = 0;
+  p.value[1] = 1;
+  p.value[2] = 100;
+  p.value[3] = 255;
   var offset = p.write(view, 0);
-  p.value.length = 2;
-  p.value[0] = 255;
-  p.value[1] = 0;
-  offset = p.write(view, offset);
+  var u8array2 = netprop.array(netprop.u8, 2);
+  var p2 = new u8array2;
+  p2.value[0] = 255;
+  p2.value[1] = 0;
+  offset = p2.write(view, offset);
   equals(offset, 14);
-  p.value.length = 0;
-  offset = p.write(view, offset);
+  var u8array0 = netprop.array(netprop.u8);
+  var p3 = new u8array0;
+  offset = p3.write(view, offset);
   equals(offset, 18);
 
-  var p2 = new u8array;
-  offset = p2.read(view, 0);
-  equals(p2.value.length, 4);
-  equals(p2.value[0], 0);
-  equals(p2.value[1], 1);
-  equals(p2.value[2], 100);
-  equals(p2.value[3], 255);
-  offset = p2.read(view, offset);
-  equals(p2.value.length, 2);
-  equals(p2.value[0], 255);
-  equals(p2.value[1], 0);
-  offset = p2.read(view, offset);
-  equals(p2.value.length, 0);
+  var p4 = new u8array0;
+  offset = p4.read(view, 0);
+  equals(p4.value.length, 4);
+  equals(p4.value[0], 0);
+  equals(p4.value[1], 1);
+  equals(p4.value[2], 100);
+  equals(p4.value[3], 255);
+  offset = p4.read(view, offset);
+  equals(p4.value.length, 2);
+  equals(p4.value[0], 255);
+  equals(p4.value[1], 0);
+  offset = p4.read(view, offset);
+  equals(p4.value.length, 0);
 });
 
 test("netobject", function() {
@@ -294,7 +296,7 @@ test("netobject", function() {
 
 test("netobject with array", function() {
   function testobj() {
-    netobject.call(this, {a: netprop.u8, b: netprop.array(netprop.u32)});
+    netobject.call(this, {a: netprop.u8, b: netprop.array(netprop.u32, 2)});
   }
   testobj.prototype = netobject.register(testobj);
 
@@ -302,8 +304,8 @@ test("netobject with array", function() {
   var view = new DataView(buf);
   var t = new testobj();
   t.a = 255;
-  t.b.push(0xABCD1234);
-  t.b.push(0xFFFFFFFF);
+  t.b[0] = 0xABCD1234;
+  t.b[1] = 0xFFFFFFFF;
   equals(t.write(view, 0), 13);
 
   var t2 = new testobj();
