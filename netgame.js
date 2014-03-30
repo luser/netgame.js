@@ -1,3 +1,4 @@
+/* -*- Mode: js2; tab-width: 8; indent-tabs-mode: nil; js2-basic-offset: 2 -*- */
 "use strict";
 (function(scope) {
   var perfnow = window && 'performance' in window && 'now' in window.performance
@@ -107,6 +108,14 @@
     write: function(dataview, offset) {
       this._write(dataview, offset);
       return offset + this.size();
+    },
+    /*
+     * Return true if this property's value is equal to
+     * other.
+     */
+    equals: function(other) {
+      // This is overridden by subclasses that need to.
+      return this.value == other;
     }
   };
   // Built-in types.
@@ -251,6 +260,16 @@
       this.size = function() {
         return 4 + this.value.length * t.size();
       };
+      this.equals = function(other) {
+        if (this.value.length != other.length)
+          return false;
+
+        for (var i = 0; i < this.value.length; i++) {
+          if (this.value[i] != other[i])
+              return false;
+        }
+        return true;
+      };
 
       this._read = function(dataview, offset) {
         var length = dataview.getUint32(offset, true);
@@ -307,6 +326,8 @@
   function netobject(props) {
     var netprops = [];
     var keys = Object.keys(props).sort();
+    // N bits to indicate presence of each property
+    var headerBytes = Math.ceil(keys.length / 8);
     function defineProp(obj, name) {
       var np = new props[name](name);
       netprops.push(np);
@@ -328,10 +349,20 @@
      * Write all the properties of this object to dataview starting at offset.
      * Returns the new offset after writing.
      */
-    this.write = function(dataview, offset) {
+    this.write = function(dataview, offset, old) {
+      var header = 0;
+      var headerOffset = offset;
+      offset += headerBytes;
       for (var i = 0; i < netprops.length; i++) {
-        //TODO: delta compress
-        offset = netprops[i].write(dataview, offset);
+        if (old === undefined || !netprops[i].equals(old[netprops[i].name])) {
+          //TODO: allow props to write their own deltas vs. previous?
+          offset = netprops[i].write(dataview, offset);
+          header |= (1<<i);
+        }
+      }
+      //TODO: doesn't handle arbitrary number of properties
+      for (i = 0; i < headerBytes; i++) {
+        dataview.setUint8(headerOffset + i, (header & (0xFF << i)) >> i);
       }
       return offset;
     };
@@ -341,23 +372,54 @@
      * Return the new offset after reading.
      */
     this.read = function(dataview, offset) {
-      for (var i = 0; i < netprops.length; i++) {
-        //TODO: delta compress
-        offset = netprops[i].read(dataview, offset);
+      var header = 0;
+      for (var i = 0; i < headerBytes; i++) {
+        header |= dataview.getUint8(offset + i) << i;
+      }
+      offset += headerBytes;
+      for (i = 0; i < netprops.length; i++) {
+        if (header & (1<<i)) {
+          offset = netprops[i].read(dataview, offset);
+        }
       }
       return offset;
     };
 
     /*
-     * Return the number of bytes this object requires to serialize all of
+     * Return the maximum number of bytes this object requires to serialize all of
      * its properties.
      */
     this.size = function() {
-      var total = 0;
+      var total = headerBytes;
       for (var i = 0; i < netprops.length; i++) {
         total += netprops[i].size();
       }
       return total;
+    };
+
+    /*
+     * Return an object that superficially resembles this one, having the same
+     * properties but no methods.
+     */
+    this.lightClone = function() {
+      var c = {};
+      for (var i = 0; i < netprops.length; i++) {
+        var newval;
+        if (netprops[i].value instanceof Array) {
+          newval = netprops[i].value.slice(0);
+        } else if (netprops[i].value instanceof Object && 'buffer' in netprops[i].value) {
+          if ('slice' in netprops[i].value.buffer) {
+            newval = new netprops[i].value.constructor(netprops[i].value.buffer.slice());
+          } else {
+            newval = new netprops[i].value.constructor(netprops[i].value.length);
+            newval.set(netprops[i].value);
+          }
+        } else {
+          newval = netprops[i].value;
+        }
+        c[netprops[i].name] = newval;
+      }
+      return c;
     };
   }
 

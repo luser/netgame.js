@@ -286,15 +286,67 @@ test("netobject", function() {
   var t = new testobj();
   t.a = 255;
   t.b = 0xABCD1234;
-  equals(t.write(view, 0), 5);
+  equals(t.write(view, 0), 6);
 
   var t2 = new testobj();
-  equals(t2.read(view, 0), 5);
+  equals(t2.read(view, 0), 6);
   equals(t2.a, t.a);
   equals(t2.b, t.b);
 });
 
+test("netobject lightClone", function() {
+  function testobj() {
+    netobject.call(this, {a: netprop.u8, b: netprop.u32, c: netprop.array(netprop.u8, 3)});
+  }
+  testobj.prototype = netobject.register(testobj);
+
+  var t = new testobj();
+  t.a = 123;
+  t.b = 0xFF00FF00;
+  t.c[0] = 1;
+  t.c[1] = 0xFF;
+  t.c[2] = 100;
+
+  var c = t.lightClone();
+  equals(t.a, c.a);
+  equals(t.b, c.b);
+  notStrictEqual(t.c, c.c);
+  equals(t.c.length, c.c.length);
+  equals(t.c[0], c.c[0]);
+  equals(t.c[1], c.c[1]);
+  equals(t.c[2], c.c[2]);
+});
+
+test("netobject delta", function() {
+  function testobj() {
+    netobject.call(this, {a: netprop.u8, b: netprop.u32, c: netprop.array(netprop.u8, 3)});
+  }
+  testobj.prototype = netobject.register(testobj);
+
+  var buf = new ArrayBuffer(32);
+  var view = new DataView(buf);
+  var t = new testobj();
+  t.a = 255;
+  t.b = 0xABCD1234;
+  t.c[0] = 1;
+  t.c[1] = 0xFF;
+  t.c[2] = 100;
+  equals(t.write(view, 0), 13);
+
+  var c = t.lightClone();
+  t.a = 100;
+  t.c[1] = 0;
+  equals(t.write(view, 0, c), 9);
+
+  var t2 = new testobj();
+  equals(t2.read(view, 0), 9);
+  // Can't test b here because it wasn't actually read from the delta update.
+  equals(t2.a, t.a);
+  equals(t2.c[1], t.c[1]);
+});
+
 test("netobject with array", function() {
+  //TODO: test netprop.array with nonstandard value type
   function testobj() {
     netobject.call(this, {a: netprop.u8, b: netprop.array(netprop.u32, 2)});
   }
@@ -306,10 +358,10 @@ test("netobject with array", function() {
   t.a = 255;
   t.b[0] = 0xABCD1234;
   t.b[1] = 0xFFFFFFFF;
-  equals(t.write(view, 0), 13);
+  equals(t.write(view, 0), 14);
 
   var t2 = new testobj();
-  equals(t2.read(view, 0), 13);
+  equals(t2.read(view, 0), 14);
   equals(t2.a, t.a);
   deepEqual(t2.b, t.b);
 });
@@ -333,10 +385,10 @@ test("netobject_inherit", function() {
   var view = new DataView(buf);
   s.a = 255;
   s.b = 0xABCD1234;
-  equals(s.write(view, 0), 5);
+  equals(s.write(view, 0), 6);
 
   var s2 = new subobj();
-  equals(s2.read(view, 0), 5);
+  equals(s2.read(view, 0), 6);
   equals(s2.a, s.a);
   equals(s2.b, s.b);
 });
