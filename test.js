@@ -394,11 +394,11 @@ test("netobject_inherit", function() {
 });
 
 test("server_net", function() {
-  var packetReceived = false;
+  var packetsReceived = 0;
   var server = new server_net();
-  var client = new client_net({send: function(data) {}}); // client doesn't send any data.
+  var client = new client_net({send: function(data) { sclient.recv(data); }});
   client.onupdate = function() {
-     packetReceived = true;
+     packetsReceived++;
   };
   var sclient = new server_client({send: function(data) { client.recv(data); }});
   server.addClient(sclient);
@@ -425,7 +425,7 @@ test("server_net", function() {
   thing3.x = 0xABABABAB;
   server.updateClients([thing1, thing2, thing3]);
 
-  ok(packetReceived);
+  equals(packetsReceived, 1);
   equals(client.things.length, 3);
 
   var thing1_read = client.things[0];
@@ -442,6 +442,20 @@ test("server_net", function() {
 
   var thing3_read = client.things[2];
   ok(thing3_read instanceof anotherthing);
+  equals(thing3_read.x, thing3.x);
+
+  // Have client ack previous server state.
+  client.sendToServer();
+
+  thing1.b = 8754321;
+  thing3.x = 0xF0F0F0F0;
+
+  server.updateClients([thing1, thing2, thing3]);
+
+  equals(packetsReceived, 2);
+  equals(client.things.length, 3);
+
+  equals(thing1_read.b, thing1.b);
   equals(thing3_read.x, thing3.x);
 });
 

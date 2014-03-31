@@ -447,7 +447,7 @@
    */
   function clientinput(props) {
     props = props || {};
-    props.timestamp = netobj.u32;
+    props.timestamp = netprop.u32;
     netobject.call(this, props);
     this.inputID = -1;
   }
@@ -518,12 +518,22 @@
           break;
         if (netID >= netObjects.length)
           break;
-        //TODO: cache netobjects so we don't allocate every time?
-        var obj = new netObjects[netID]();
-        offset = obj.read(view, offset);
+        var obj = null;
+        if (self.things[index]) {
+            if (self.things[index].constructor.prototype.netID == netID) {
+                obj = self.things[index];
+                offset = obj.read(view, offset, obj);
+            }
+        }
+        if (obj == null) {
+            //TODO: keep a set of netobjects for reuse?
+            obj = new netObjects[netID]();
+            offset = obj.read(view, offset);
+        }
+
         self.things[index] = obj;
-        callback(self, "onupdate", []);
       }
+      callback(self, "onupdate", []);
     };
 
     /*
@@ -587,6 +597,10 @@
 
     // The last input ID this client sent.
     var lastReceivedInputID = -1;
+    // Game states sent to client, used for delta compression.
+    // Assuming we're updating the client at 50Hz, this is 1 second worth of data.
+    var gameStates = new Array(50);
+    var lastAckedGameState = null;
     var self = this;
     this.netconn.onpacket = function(packet) {
       var view = new DataView(packet);
@@ -613,14 +627,41 @@
       }
       lastReceivedInputID = firstInputID + IDcount - 1;
     };
+    this.netconn.onack = function(acked) {
+      lastAckedGameState = acked;
+    };
+    this.sendupdate = function(now, things, thingsCopy) {
+      var total = 4; // server timestamp
+      for (var i = 0; i < things.length; i++) {
+        total += 2; // index + netID as u8s, pretty wasteful right now
+        total += things[i].size();
+      }
+      var oldthings = null;
+      if (lastAckedGameState != null &&
+          gameStates[lastAckedGameState % gameStates.length].id == lastAckedGameState) {
+        oldthings = gameStates[lastAckedGameState % gameStates.length].things;
+      }
+      var packet = new ArrayBuffer(total);
+      var view = new DataView(packet);
+      var offset = 0;
+      view.setUint32(offset, now, true);
+      offset += 4;
+      for (i = 0; i < things.length; i++) {
+        view.setUint8(offset, i);
+        offset++;
+        view.setUint8(offset, things[i].netID);
+        offset++;
+        offset = things[i].write(view, offset, oldthings ? oldthings[i] : undefined);
+      }
+      if (offset < total) {
+        //console.log("Saved %d bytes with delta compression (%d/%d)", total - offset, offset, total);
+        packet = packet.slice(0, offset);
+      }
+      var seq = this.netconn.sendPacket(this.sender, packet);
+      gameStates[seq % gameStates.length] = {id: seq, things: thingsCopy};
+    };
   }
   server_client.prototype = {
-    /*
-     * Send a packet to the client.
-     */
-    send: function(data) {
-      this.netconn.sendPacket(this.sender, data);
-    },
     /*
      * Pass a packet received from the network to the server.
      */
@@ -650,28 +691,13 @@
      * Send a network packet updating all clients about the list of things in the game.
      */
     updateClients: function(things) {
-      var total = 4; // server timestamp
+      var now = perfnow();
+      var thingsCopy = new Array(things.length);
       for (var i = 0; i < things.length; i++) {
-        total += 2; // index + netID as u8s, pretty wasteful right now
-        total += things[i].size();
+        thingsCopy[i] = things[i].lightClone();
       }
-      //TODO: should store world state per-client, delta-compress against
-      // acked state
-      var packet = new ArrayBuffer(total);
-      var view = new DataView(packet);
-      var offset = 0;
-      view.setUint32(offset, perfnow(), true);
-      offset += 4;
-      for (i = 0; i < things.length; i++) {
-        view.setUint8(offset, i);
-        offset++;
-        view.setUint8(offset, things[i].netID);
-        offset++;
-        offset = things[i].write(view, offset);
-      }
-
       for (i = 0; i < this.clients.length; i++) {
-        this.clients[i].send(packet);
+        this.clients[i].sendupdate(now, things, thingsCopy);
       }
     }
   };
