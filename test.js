@@ -343,6 +343,14 @@ test("netobject delta", function() {
   // Can't test b here because it wasn't actually read from the delta update.
   equals(t2.a, t.a);
   equals(t2.c[1], t.c[1]);
+
+  var c2 = t.lightClone();
+  t.a = 123;
+  equals(t.write(view, 0, c2), 2);
+
+  var t3 = new testobj();
+  equals(t3.read(view, 0), 2);
+  equals(t3.a, t.a);
 });
 
 test("netobject with array", function() {
