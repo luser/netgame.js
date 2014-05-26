@@ -467,6 +467,8 @@
     this.netconn = new netconn();
     // Last time reported by the server.
     this.serverTime = 0;
+    // If set, the thing that represents this client's avatar.
+    this.self = null;
     // The local time at which the server time was received.
     var serverTimeReceivedAt = 0;
     // Half of the round-trip time from sending a packet to
@@ -506,6 +508,11 @@
       self.serverTime = view.getUint32(offset, true);
       serverTimeReceivedAt = perfnow();
       offset += 4;
+      var clientThing = view.getUint8(offset);
+      if (clientThing == 255) {
+        clientThing = -1;
+      }
+      offset++;
       // Iterate over all netobjects in this packet.
       while (offset < view.byteLength) {
         var index = view.getUint8(offset);
@@ -532,6 +539,9 @@
         }
 
         self.things[index] = obj;
+        if (index == clientThing) {
+          self.self = obj;
+        }
       }
       callback(self, "onupdate", []);
     };
@@ -594,6 +604,8 @@
   function server_client(sender) {
     this.sender = function(data) { sender.send(data); };
     this.netconn = new netconn();
+    // If set, inform the client that this is their avatar.
+    this.clientThing = null;
 
     // The last input ID this client sent.
     var lastReceivedInputID = -1;
@@ -631,7 +643,7 @@
       lastAckedGameState = acked;
     };
     this.sendupdate = function(now, things, thingsCopy) {
-      var total = 4; // server timestamp
+      var total = 5; // server timestamp + client thing
       for (var i = 0; i < things.length; i++) {
         total += 2; // index + netID as u8s, pretty wasteful right now
         total += things[i].size();
@@ -646,6 +658,9 @@
       var offset = 0;
       view.setUint32(offset, now, true);
       offset += 4;
+      var c = this.clientThing ? things.indexOf(this.clientThing) : 255;
+      view.setUint8(offset, c);
+      offset++;
       for (i = 0; i < things.length; i++) {
         view.setUint8(offset, i);
         offset++;

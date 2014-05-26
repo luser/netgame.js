@@ -435,6 +435,7 @@ test("server_net", function() {
 
   equals(packetsReceived, 1);
   equals(client.things.length, 3);
+  equals(client.self, null);
 
   var thing1_read = client.things[0];
   ok(thing1_read instanceof thing);
@@ -458,10 +459,12 @@ test("server_net", function() {
   thing1.b = 8754321;
   thing3.x = 0xF0F0F0F0;
 
+  sclient.clientThing = thing2;
   server.updateClients([thing1, thing2, thing3]);
 
   equals(packetsReceived, 2);
   equals(client.things.length, 3);
+  equals(client.self, client.things[1]);
 
   equals(thing1_read.b, thing1.b);
   equals(thing3_read.x, thing3.x);
